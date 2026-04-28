@@ -3,6 +3,9 @@ useDynLib(gdscloud,
     gdscloud_open_s3, gdscloud_open_gcs, gdscloud_open_azure,
     gdscloud_cache_clear, gdscloud_cache_info)
 
+# Import gdsfmt so its DLL are loaded first
+import(gdsfmt)
+
 # Export the following names
 export(
     cloud.open.gds,
