@@ -40,21 +40,21 @@ extern "C" {
 // =====================================================================
 
 typedef struct CacheBlock {
-    long long offset;           // file offset this block covers
-    long long valid_size;       // actual valid bytes in this block
-    unsigned char *data;        // block data buffer (CLOUD_BLOCK_SIZE)
-    struct CacheBlock *prev;    // LRU: more recently used
-    struct CacheBlock *next;    // LRU: less recently used
+	long long offset;           // file offset this block covers
+	long long valid_size;       // actual valid bytes in this block
+	unsigned char *data;        // block data buffer (CLOUD_BLOCK_SIZE)
+	struct CacheBlock *prev;    // LRU: more recently used
+	struct CacheBlock *next;    // LRU: less recently used
 } CacheBlock;
 
 typedef struct BlockCache {
-    CacheBlock *head;           // most recently used
-    CacheBlock *tail;           // least recently used
-    int num_blocks;             // current number of blocks
-    int max_blocks;             // max blocks allowed
-    long long block_size;       // size of each block
-    long long total_hits;       // cache hit count
-    long long total_misses;     // cache miss count
+	CacheBlock *head;           // most recently used
+	CacheBlock *tail;           // least recently used
+	int num_blocks;             // current number of blocks
+	int max_blocks;             // max blocks allowed
+	long long block_size;       // size of each block
+	long long total_hits;       // cache hit count
+	long long total_misses;     // cache miss count
 } BlockCache;
 
 
@@ -63,13 +63,13 @@ typedef struct BlockCache {
 // =====================================================================
 
 typedef struct CloudBackend {
-    /// Read a byte range from the URL; return bytes read, or -1 on error
-    long long (*read_range)(void *backend_data, const char *url,
-        long long offset, long long length, unsigned char *buffer);
-    /// Get total file size; return size, or -1 on error
-    long long (*get_size)(void *backend_data, const char *url);
-    /// Free backend resources
-    void (*close)(void *backend_data);
+	/// Read a byte range from the URL; return bytes read, or -1 on error
+	long long (*read_range)(void *backend_data, const char *url,
+		long long offset, long long length, unsigned char *buffer);
+	/// Get total file size; return size, or -1 on error
+	long long (*get_size)(void *backend_data, const char *url);
+	/// Free backend resources
+	void (*close)(void *backend_data);
 } CloudBackend;
 
 
@@ -78,12 +78,12 @@ typedef struct CloudBackend {
 // =====================================================================
 
 typedef struct CloudStream {
-    char url[CLOUD_MAX_URL_LEN];    // resolved HTTP(S) URL
-    long long file_size;             // total file size (-1 if unknown)
-    long long position;              // current read position
-    BlockCache cache;                // block cache
-    CloudBackend backend;            // backend function pointers
-    void *backend_data;              // backend-specific state
+	char url[CLOUD_MAX_URL_LEN];    // resolved HTTP(S) URL
+	long long file_size;             // total file size (-1 if unknown)
+	long long position;              // current read position
+	BlockCache cache;                // block cache
+	CloudBackend backend;            // backend function pointers
+	void *backend_data;              // backend-specific state
 } CloudStream;
 
 
@@ -93,8 +93,8 @@ typedef struct CloudStream {
 
 /// Create a new cloud stream
 CloudStream *cloud_stream_create(const char *url,
-    CloudBackend *backend, void *backend_data,
-    long long block_size, long long max_cache_size);
+	CloudBackend *backend, void *backend_data,
+	long long block_size, long long max_cache_size);
 
 /// Read from the cloud stream (updates position)
 long long cloud_stream_read(CloudStream *cs, void *buffer, long long count);
@@ -117,7 +117,7 @@ void cache_init(BlockCache *bc, long long block_size, long long max_cache_size);
 void cache_free(BlockCache *bc);
 CacheBlock *cache_get(BlockCache *bc, long long offset);
 CacheBlock *cache_put(BlockCache *bc, long long offset, const unsigned char *data,
-    long long valid_size);
+	long long valid_size);
 void cache_clear_all(BlockCache *bc);
 
 

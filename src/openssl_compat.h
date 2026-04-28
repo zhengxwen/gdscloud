@@ -32,10 +32,10 @@
 // =====================================================================
 
 static inline void sha256_hash(const unsigned char *data, size_t len,
-    unsigned char *out)
+	unsigned char *out)
 {
-    unsigned int md_len = 32;
-    EVP_Digest(data, len, out, &md_len, EVP_sha256(), NULL);
+	unsigned int md_len = 32;
+	EVP_Digest(data, len, out, &md_len, EVP_sha256(), NULL);
 }
 
 
@@ -46,24 +46,24 @@ static inline void sha256_hash(const unsigned char *data, size_t len,
 // =====================================================================
 
 static inline void hmac_sha256(const unsigned char *key, size_t key_len,
-    const unsigned char *data, size_t data_len, unsigned char *out)
+	const unsigned char *data, size_t data_len, unsigned char *out)
 {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
-    EVP_MAC_CTX *ctx = EVP_MAC_CTX_new(mac);
-    OSSL_PARAM params[2];
-    params[0] = OSSL_PARAM_construct_utf8_string(
-        OSSL_MAC_PARAM_DIGEST, "SHA256", 0);
-    params[1] = OSSL_PARAM_construct_end();
-    EVP_MAC_init(ctx, key, key_len, params);
-    EVP_MAC_update(ctx, data, data_len);
-    size_t out_len = 32;
-    EVP_MAC_final(ctx, out, &out_len, 32);
-    EVP_MAC_CTX_free(ctx);
-    EVP_MAC_free(mac);
+	EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+	EVP_MAC_CTX *ctx = EVP_MAC_CTX_new(mac);
+	OSSL_PARAM params[2];
+	params[0] = OSSL_PARAM_construct_utf8_string(
+		OSSL_MAC_PARAM_DIGEST, "SHA256", 0);
+	params[1] = OSSL_PARAM_construct_end();
+	EVP_MAC_init(ctx, key, key_len, params);
+	EVP_MAC_update(ctx, data, data_len);
+	size_t out_len = 32;
+	EVP_MAC_final(ctx, out, &out_len, 32);
+	EVP_MAC_CTX_free(ctx);
+	EVP_MAC_free(mac);
 #else
-    unsigned int len = 32;
-    HMAC(EVP_sha256(), key, (int)key_len, data, data_len, out, &len);
+	unsigned int len = 32;
+	HMAC(EVP_sha256(), key, (int)key_len, data, data_len, out, &len);
 #endif
 }
 
