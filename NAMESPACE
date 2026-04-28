@@ -1,0 +1,15 @@
+# Dynamically load the compiled C/C++ shared library
+useDynLib(gdscloud,
+    gdscloud_open_s3, gdscloud_open_gcs, gdscloud_open_azure,
+    gdscloud_cache_clear, gdscloud_cache_info)
+
+# Export the following names
+export(
+    cloud.open.gds,
+    gds.cloud.config,
+    gds.cloud.config.gcs,
+    gds.cloud.config.azure,
+    gds.cloud.cache_size,
+    gds.cloud.cache_clear,
+    gds.cloud.info
+)

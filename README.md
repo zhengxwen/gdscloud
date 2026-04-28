@@ -1,0 +1,92 @@
+# gdscloud: Cloud Storage Access for GDS Files
+
+Provides read-only access to GDS (Genomic Data Structure) files stored on cloud
+storage services:
+
+- **Amazon S3** (`s3://bucket/key`)
+- **Google Cloud Storage** (`gs://bucket/key`)
+- **Azure Blob Storage** (`az://container/blob`)
+
+## Installation
+
+```r
+# Install from source
+install.packages("gdscloud", repos=NULL, type="source")
+```
+
+## Usage
+
+```r
+library(gdscloud)
+
+# Open a GDS file from S3 (transparent via openfn.gds)
+gds <- openfn.gds("s3://my-bucket/data/example.gds")
+read.gdsn(index.gdsn(gds, "genotype"))
+closefn.gds(gds)
+
+# Or use the explicit function
+gds <- cloud.open.gds("s3://my-bucket/data/example.gds")
+closefn.gds(gds)
+```
+
+## Authentication
+
+### AWS S3
+Set environment variables:
+```bash
+export AWS_ACCESS_KEY_ID=your_key
+export AWS_SECRET_ACCESS_KEY=your_secret
+export AWS_DEFAULT_REGION=us-east-1
+# Optional:
+export AWS_SESSION_TOKEN=your_token
+```
+
+Or configure in R:
+```r
+gds.cloud.config(
+    aws_access_key_id = "your_key",
+    aws_secret_access_key = "your_secret",
+    region = "us-east-1"
+)
+```
+
+### Google Cloud Storage
+```bash
+export GCS_ACCESS_TOKEN=your_token
+```
+
+Or:
+```r
+gds.cloud.config.gcs(access_token = "your_token")
+```
+
+### Azure Blob Storage
+```bash
+export AZURE_STORAGE_ACCOUNT=your_account
+export AZURE_STORAGE_KEY=your_key
+# Or use SAS token:
+export AZURE_STORAGE_SAS_TOKEN=your_sas
+```
+
+Or:
+```r
+gds.cloud.config.azure(account_name = "your_account", account_key = "your_key")
+```
+
+## Cache Control
+
+```r
+# Set cache size (default: 64MB)
+gds.cloud.cache_size(128)
+
+# Clear all caches
+gds.cloud.cache_clear()
+
+# Show cache statistics
+gds.cloud.info()
+```
+
+## System Requirements
+
+- libcurl >= 7.28.0
+- gdsfmt >= 1.49.1

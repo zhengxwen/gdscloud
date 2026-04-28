@@ -1,0 +1,2 @@
+PKG_CPPFLAGS = $(shell curl-config --cflags)
+PKG_LIBS = $(shell curl-config --libs) -lssl -lcrypto
