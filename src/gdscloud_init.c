@@ -12,6 +12,7 @@
 #include <R.h>
 #include <Rinternals.h>
 #include <R_ext/Rdynload.h>
+#include <curl/curl.h>
 
 
 // External declarations from gdscloud.c
@@ -44,4 +45,12 @@ void R_init_gdscloud(DllInfo *info)
 
     // initialize gdsfmt function pointers (required before any GDS_* call)
     Init_GDS_Routines();
+
+    // initialize libcurl (required before any curl_easy_* call)
+    curl_global_init(CURL_GLOBAL_ALL);
+}
+
+void R_unload_gdscloud(DllInfo *info)
+{
+    curl_global_cleanup();
 }
