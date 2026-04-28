@@ -43,7 +43,7 @@ export AWS_SESSION_TOKEN=your_token
 
 Or configure in R:
 ```r
-gds.cloud.config(
+gds.cloud.config.s3(
     aws_access_key_id = "your_key",
     aws_secret_access_key = "your_secret",
     region = "us-east-1"

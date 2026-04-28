@@ -23,7 +23,7 @@ cloud.open.gds(url, allow.error=FALSE)
 \details{
     The function automatically detects the URL scheme and uses the
     appropriate cloud backend. Authentication credentials are read from
-    environment variables or from values set via \code{\link{gds.cloud.config}}.
+    environment variables or from values set via \code{\link{gds.cloud.config.s3}}.
 
     All cloud access is read-only. The file data is cached in memory using
     an LRU block cache (default 64 MB) for efficient random access.
@@ -33,13 +33,13 @@ cloud.open.gds(url, allow.error=FALSE)
     to this function.
 }
 \seealso{
-    \code{\link{gds.cloud.config}}, \code{\link{gds.cloud.cache_size}},
+    \code{\link{gds.cloud.config.s3}}, \code{\link{gds.cloud.cache_size}},
     \code{\link[gdsfmt]{openfn.gds}}, \code{\link[gdsfmt]{closefn.gds}}
 }
 \examples{
 \dontrun{
 # Set AWS credentials
-gds.cloud.config(
+gds.cloud.config.s3(
     aws_access_key_id = "AKIAIOSFODNN7EXAMPLE",
     aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     region = "us-east-1"

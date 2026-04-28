@@ -1,5 +1,5 @@
-\name{gds.cloud.config}
-\alias{gds.cloud.config}
+\name{gds.cloud.config.s3}
+\alias{gds.cloud.config.s3}
 \alias{gds.cloud.config.gcs}
 \alias{gds.cloud.config.azure}
 \title{Configure Cloud Storage Credentials}
@@ -9,7 +9,7 @@
     variables.
 }
 \usage{
-gds.cloud.config(aws_access_key_id=NULL, aws_secret_access_key=NULL,
+gds.cloud.config.s3(aws_access_key_id=NULL, aws_secret_access_key=NULL,
     region=NULL, session_token=NULL)
 
 gds.cloud.config.gcs(access_token=NULL)
@@ -45,7 +45,7 @@ gds.cloud.config.azure(account_name=NULL, account_key=NULL, sas_token=NULL)
 \examples{
 \dontrun{
 # AWS S3
-gds.cloud.config(
+gds.cloud.config.s3(
     aws_access_key_id = "your_key",
     aws_secret_access_key = "your_secret",
     region = "us-east-1"

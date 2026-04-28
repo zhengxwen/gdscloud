@@ -6,7 +6,7 @@ useDynLib(gdscloud,
 # Export the following names
 export(
     cloud.open.gds,
-    gds.cloud.config,
+    gds.cloud.config.s3,
     gds.cloud.config.gcs,
     gds.cloud.config.azure,
     gds.cloud.cache_size,

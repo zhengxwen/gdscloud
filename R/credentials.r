@@ -12,7 +12,7 @@
 #############################################################
 # Configure AWS S3 credentials
 #
-gds.cloud.config <- function(aws_access_key_id=NULL,
+gds.cloud.config.s3 <- function(aws_access_key_id=NULL,
     aws_secret_access_key=NULL, region=NULL, session_token=NULL)
 {
     if (!is.null(aws_access_key_id))
