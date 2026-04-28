@@ -85,15 +85,13 @@ static void url_encode_path(const char *src, char *dst, size_t dst_size)
 	{
 		unsigned char c = (unsigned char)src[i];
 		if (c == '/' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-		    (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+			(c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
 		{
-		    dst[j++] = c;
-		}
-		else
-		{
-		    dst[j++] = '%';
-		    dst[j++] = hex[(c >> 4) & 0x0f];
-		    dst[j++] = hex[c & 0x0f];
+			dst[j++] = c;
+		} else {
+			dst[j++] = '%';
+			dst[j++] = hex[(c >> 4) & 0x0f];
+			dst[j++] = hex[c & 0x0f];
 		}
 	}
 	dst[j] = '\0';
@@ -117,7 +115,7 @@ static long long gcs_read_range(void *backend_data, const char *url,
 	{
 		char auth_hdr[CLOUD_MAX_CRED_LEN + 32];
 		snprintf(auth_hdr, sizeof(auth_hdr),
-		    "Authorization: Bearer %s", gcs->access_token);
+			"Authorization: Bearer %s", gcs->access_token);
 		headers = curl_slist_append(headers, auth_hdr);
 	}
 
@@ -167,7 +165,7 @@ static long long gcs_get_size(void *backend_data, const char *url)
 	{
 		char auth_hdr[CLOUD_MAX_CRED_LEN + 32];
 		snprintf(auth_hdr, sizeof(auth_hdr),
-		    "Authorization: Bearer %s", gcs->access_token);
+			"Authorization: Bearer %s", gcs->access_token);
 		headers = curl_slist_append(headers, auth_hdr);
 	}
 

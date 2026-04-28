@@ -128,42 +128,42 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 
 		// validate URL format
 		if (!c_url || !c_url[0])
-		    throw ErrGDSCloud("S3 URL is empty or missing");
+			throw ErrGDSCloud("S3 URL is empty or missing");
 		if (strncmp(c_url, "s3://", 5) != 0)
-		    throw ErrGDSCloud("Invalid S3 URL '%s': must start with 's3://'", c_url);
+			throw ErrGDSCloud("Invalid S3 URL '%s': must start with 's3://'", c_url);
 		if (!strchr(c_url + 5, '/'))
-		    throw ErrGDSCloud("Invalid S3 URL '%s': missing object key (expected 's3://bucket/key')", c_url);
+			throw ErrGDSCloud("Invalid S3 URL '%s': missing object key (expected 's3://bucket/key')", c_url);
 
 		// create S3 backend
 		S3BackendData *s3 = s3_backend_create(c_url, c_ak, c_sk, c_rgn, c_tok);
 		if (!s3)
-		    throw ErrGDSCloud("Failed to create S3 backend for '%s'", c_url);
+			throw ErrGDSCloud("Failed to create S3 backend for '%s'", c_url);
 
 		// create cloud stream with cache
 		long long max_cache = (long long)(c_cache * 1024 * 1024);
 		CloudStream *cs = cloud_stream_create(c_url,
-		    &s3_backend_vtable, s3, CLOUD_BLOCK_SIZE, max_cache);
+			&s3_backend_vtable, s3, CLOUD_BLOCK_SIZE, max_cache);
 		if (!cs)
 		{
-		    s3_backend_vtable.close(s3);
-		    throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
+			s3_backend_vtable.close(s3);
+			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
 		}
 
 		// open via gdsfmt callback API
 		PdGDSFile file = GDS_File_Open_Callback(
-		    (TdCbStreamRead)gdscloud_cb_read,
-		    (TdCbStreamWrite)NULL,
-		    (TdCbStreamSeek)gdscloud_cb_seek,
-		    (TdCbStreamGetSize)gdscloud_cb_getsize,
-		    (TdCbStreamSetSize)NULL,
-		    (TdCbStreamClose)gdscloud_cb_close,
-		    cs, TRUE, FALSE);
+			(TdCbStreamRead)gdscloud_cb_read,
+			(TdCbStreamWrite)NULL,
+			(TdCbStreamSeek)gdscloud_cb_seek,
+			(TdCbStreamGetSize)gdscloud_cb_getsize,
+			(TdCbStreamSetSize)NULL,
+			(TdCbStreamClose)gdscloud_cb_close,
+			cs, TRUE, FALSE);
 
 		if (!file)
 		{
-		    cloud_stream_close(cs);
-		    throw ErrGDSCloud("Failed to open GDS file from '%s': "
-		        "the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
+			cloud_stream_close(cs);
+			throw ErrGDSCloud("Failed to open GDS file from '%s': "
+				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
 		}
 
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
@@ -186,39 +186,39 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 
 		// validate URL format
 		if (!c_url || !c_url[0])
-		    throw ErrGDSCloud("GCS URL is empty or missing");
+			throw ErrGDSCloud("GCS URL is empty or missing");
 		if (strncmp(c_url, "gs://", 5) != 0)
-		    throw ErrGDSCloud("Invalid GCS URL '%s': must start with 'gs://'", c_url);
+			throw ErrGDSCloud("Invalid GCS URL '%s': must start with 'gs://'", c_url);
 		if (!strchr(c_url + 5, '/'))
-		    throw ErrGDSCloud("Invalid GCS URL '%s': missing object key (expected 'gs://bucket/key')", c_url);
+			throw ErrGDSCloud("Invalid GCS URL '%s': missing object key (expected 'gs://bucket/key')", c_url);
 
 		GCSBackendData *gcs = gcs_backend_create(c_url, c_tok);
 		if (!gcs)
-		    throw ErrGDSCloud("Failed to create GCS backend for '%s'", c_url);
+			throw ErrGDSCloud("Failed to create GCS backend for '%s'", c_url);
 
 		long long max_cache = (long long)(c_cache * 1024 * 1024);
 		CloudStream *cs = cloud_stream_create(c_url,
-		    &gcs_backend_vtable, gcs, CLOUD_BLOCK_SIZE, max_cache);
+			&gcs_backend_vtable, gcs, CLOUD_BLOCK_SIZE, max_cache);
 		if (!cs)
 		{
-		    gcs_backend_vtable.close(gcs);
-		    throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
+			gcs_backend_vtable.close(gcs);
+			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
 		}
 
 		PdGDSFile file = GDS_File_Open_Callback(
-		    (TdCbStreamRead)gdscloud_cb_read,
-		    (TdCbStreamWrite)NULL,
-		    (TdCbStreamSeek)gdscloud_cb_seek,
-		    (TdCbStreamGetSize)gdscloud_cb_getsize,
-		    (TdCbStreamSetSize)NULL,
-		    (TdCbStreamClose)gdscloud_cb_close,
-		    cs, TRUE, FALSE);
+			(TdCbStreamRead)gdscloud_cb_read,
+			(TdCbStreamWrite)NULL,
+			(TdCbStreamSeek)gdscloud_cb_seek,
+			(TdCbStreamGetSize)gdscloud_cb_getsize,
+			(TdCbStreamSetSize)NULL,
+			(TdCbStreamClose)gdscloud_cb_close,
+			cs, TRUE, FALSE);
 
 		if (!file)
 		{
-		    cloud_stream_close(cs);
-		    throw ErrGDSCloud("Failed to open GDS file from '%s': "
-		        "the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
+			cloud_stream_close(cs);
+			throw ErrGDSCloud("Failed to open GDS file from '%s': "
+				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
 		}
 
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
@@ -244,41 +244,41 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 
 		// validate URL format
 		if (!c_url || !c_url[0])
-		    throw ErrGDSCloud("Azure URL is empty or missing");
+			throw ErrGDSCloud("Azure URL is empty or missing");
 		if (strncmp(c_url, "az://", 5) != 0)
-		    throw ErrGDSCloud("Invalid Azure URL '%s': must start with 'az://'", c_url);
+			throw ErrGDSCloud("Invalid Azure URL '%s': must start with 'az://'", c_url);
 		if (!strchr(c_url + 5, '/'))
-		    throw ErrGDSCloud("Invalid Azure URL '%s': missing blob name (expected 'az://container/blob')", c_url);
+			throw ErrGDSCloud("Invalid Azure URL '%s': missing blob name (expected 'az://container/blob')", c_url);
 		if (!c_acc || !c_acc[0])
-		    throw ErrGDSCloud("Azure account name is required for '%s'", c_url);
+			throw ErrGDSCloud("Azure account name is required for '%s'", c_url);
 
 		AzureBackendData *az = azure_backend_create(c_url, c_acc, c_key, c_sas);
 		if (!az)
-		    throw ErrGDSCloud("Failed to create Azure backend for '%s'", c_url);
+			throw ErrGDSCloud("Failed to create Azure backend for '%s'", c_url);
 
 		long long max_cache = (long long)(c_cache * 1024 * 1024);
 		CloudStream *cs = cloud_stream_create(c_url,
-		    &azure_backend_vtable, az, CLOUD_BLOCK_SIZE, max_cache);
+			&azure_backend_vtable, az, CLOUD_BLOCK_SIZE, max_cache);
 		if (!cs)
 		{
-		    azure_backend_vtable.close(az);
-		    throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
+			azure_backend_vtable.close(az);
+			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
 		}
 
 		PdGDSFile file = GDS_File_Open_Callback(
-		    (TdCbStreamRead)gdscloud_cb_read,
-		    (TdCbStreamWrite)NULL,
-		    (TdCbStreamSeek)gdscloud_cb_seek,
-		    (TdCbStreamGetSize)gdscloud_cb_getsize,
-		    (TdCbStreamSetSize)NULL,
-		    (TdCbStreamClose)gdscloud_cb_close,
-		    cs, TRUE, FALSE);
+			(TdCbStreamRead)gdscloud_cb_read,
+			(TdCbStreamWrite)NULL,
+			(TdCbStreamSeek)gdscloud_cb_seek,
+			(TdCbStreamGetSize)gdscloud_cb_getsize,
+			(TdCbStreamSetSize)NULL,
+			(TdCbStreamClose)gdscloud_cb_close,
+			cs, TRUE, FALSE);
 
 		if (!file)
 		{
-		    cloud_stream_close(cs);
-		    throw ErrGDSCloud("Failed to open GDS file from '%s': "
-		        "the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
+			cloud_stream_close(cs);
+			throw ErrGDSCloud("Failed to open GDS file from '%s': "
+				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
 		}
 
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);

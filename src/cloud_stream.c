@@ -103,9 +103,9 @@ CacheBlock *cache_get(BlockCache *bc, long long offset)
 	{
 		if (cur->offset == offset)
 		{
-		    cache_promote(bc, cur);
-		    bc->total_hits++;
-		    return cur;
+			cache_promote(bc, cur);
+			bc->total_hits++;
+			return cur;
 		}
 		cur = cur->next;
 	}
@@ -208,31 +208,31 @@ long long cloud_stream_read(CloudStream *cs, void *buffer, long long count)
 	{
 		// which cache block does position fall in?
 		long long block_offset = (cs->position / cs->cache.block_size)
-		    * cs->cache.block_size;
+			* cs->cache.block_size;
 		long long offset_in_block = cs->position - block_offset;
 
 		CacheBlock *blk = cache_get(&cs->cache, block_offset);
 		if (!blk)
 		{
-		    // fetch from backend
-		    long long fetch_size = cs->cache.block_size;
-		    if (block_offset + fetch_size > cs->file_size)
-		        fetch_size = cs->file_size - block_offset;
+			// fetch from backend
+			long long fetch_size = cs->cache.block_size;
+			if (block_offset + fetch_size > cs->file_size)
+				fetch_size = cs->file_size - block_offset;
 
-		    unsigned char *tmpbuf = (unsigned char *)malloc((size_t)fetch_size);
-		    if (!tmpbuf) return (total_read > 0) ? total_read : -1;
+			unsigned char *tmpbuf = (unsigned char *)malloc((size_t)fetch_size);
+			if (!tmpbuf) return (total_read > 0) ? total_read : -1;
 
-		    long long got = cs->backend.read_range(cs->backend_data,
-		        cs->url, block_offset, fetch_size, tmpbuf);
-		    if (got <= 0)
-		    {
-		        free(tmpbuf);
-		        return (total_read > 0) ? total_read : -1;
-		    }
+			long long got = cs->backend.read_range(cs->backend_data,
+				cs->url, block_offset, fetch_size, tmpbuf);
+			if (got <= 0)
+			{
+				free(tmpbuf);
+				return (total_read > 0) ? total_read : -1;
+			}
 
-		    blk = cache_put(&cs->cache, block_offset, tmpbuf, got);
-		    free(tmpbuf);
-		    if (!blk) return (total_read > 0) ? total_read : -1;
+			blk = cache_put(&cs->cache, block_offset, tmpbuf, got);
+			free(tmpbuf);
+			if (!blk) return (total_read > 0) ? total_read : -1;
 		}
 
 		// copy available bytes from this block
@@ -265,16 +265,16 @@ long long cloud_stream_seek(CloudStream *cs, long long offset, int origin)
 	switch (origin)
 	{
 		case 0:  // soBeginning
-		    new_pos = offset;
-		    break;
+			new_pos = offset;
+			break;
 		case 1:  // soCurrent
-		    new_pos = cs->position + offset;
-		    break;
+			new_pos = cs->position + offset;
+			break;
 		case 2:  // soEnd
-		    new_pos = cs->file_size + offset;
-		    break;
+			new_pos = cs->file_size + offset;
+			break;
 		default:
-		    return -1;
+			return -1;
 	}
 
 	if (new_pos < 0) new_pos = 0;

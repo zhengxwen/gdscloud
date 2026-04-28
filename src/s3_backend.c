@@ -114,8 +114,10 @@ static void aws_sigv4_sign(S3BackendData *s3, const char *method,
 	// token header
 	token_header[0] = '\0';
 	if (s3->session_token[0])
+	{
 		snprintf(token_header, token_size,
-		    "x-amz-security-token: %s", s3->session_token);
+			"x-amz-security-token: %s", s3->session_token);
+	}
 
 	// canonical headers
 	char canonical_headers[2048];
@@ -125,41 +127,35 @@ static void aws_sigv4_sign(S3BackendData *s3, const char *method,
 	{
 		if (s3->session_token[0])
 		{
-		    snprintf(canonical_headers, sizeof(canonical_headers),
-		        "host:%s\nrange:%s\nx-amz-content-sha256:%s\n"
-		        "x-amz-date:%s\nx-amz-security-token:%s\n",
-		        s3->bucket, range_header, payload_hash,
-		        amzdate, s3->session_token);
+			snprintf(canonical_headers, sizeof(canonical_headers),
+				"host:%s\nrange:%s\nx-amz-content-sha256:%s\n"
+				"x-amz-date:%s\nx-amz-security-token:%s\n",
+				s3->bucket, range_header, payload_hash,
+				amzdate, s3->session_token);
 		    snprintf(signed_headers, sizeof(signed_headers),
-		        "host;range;x-amz-content-sha256;x-amz-date;x-amz-security-token");
+				"host;range;x-amz-content-sha256;x-amz-date;x-amz-security-token");
+		} else {
+			snprintf(canonical_headers, sizeof(canonical_headers),
+				"host:%s\nrange:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n",
+				s3->bucket, range_header, payload_hash, amzdate);
+			snprintf(signed_headers, sizeof(signed_headers),
+				"host;range;x-amz-content-sha256;x-amz-date");
 		}
-		else
-		{
-		    snprintf(canonical_headers, sizeof(canonical_headers),
-		        "host:%s\nrange:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n",
-		        s3->bucket, range_header, payload_hash, amzdate);
-		    snprintf(signed_headers, sizeof(signed_headers),
-		        "host;range;x-amz-content-sha256;x-amz-date");
-		}
-	}
-	else
-	{
+	} else {
 		if (s3->session_token[0])
 		{
-		    snprintf(canonical_headers, sizeof(canonical_headers),
-		        "host:%s\nx-amz-content-sha256:%s\n"
-		        "x-amz-date:%s\nx-amz-security-token:%s\n",
-		        s3->bucket, payload_hash, amzdate, s3->session_token);
-		    snprintf(signed_headers, sizeof(signed_headers),
-		        "host;x-amz-content-sha256;x-amz-date;x-amz-security-token");
-		}
-		else
-		{
-		    snprintf(canonical_headers, sizeof(canonical_headers),
-		        "host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n",
-		        s3->bucket, payload_hash, amzdate);
-		    snprintf(signed_headers, sizeof(signed_headers),
-		        "host;x-amz-content-sha256;x-amz-date");
+			snprintf(canonical_headers, sizeof(canonical_headers),
+				"host:%s\nx-amz-content-sha256:%s\n"
+				"x-amz-date:%s\nx-amz-security-token:%s\n",
+				s3->bucket, payload_hash, amzdate, s3->session_token);
+			snprintf(signed_headers, sizeof(signed_headers),
+				"host;x-amz-content-sha256;x-amz-date;x-amz-security-token");
+		} else {
+			snprintf(canonical_headers, sizeof(canonical_headers),
+				"host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n",
+				s3->bucket, payload_hash, amzdate);
+			snprintf(signed_headers, sizeof(signed_headers),
+				"host;x-amz-content-sha256;x-amz-date");
 		}
 	}
 
@@ -236,7 +232,7 @@ static long long s3_read_range(void *backend_data, const char *url,
 	if (s3->access_key[0] && s3->secret_key[0])
 	{
 		static const char *empty_hash =
-		    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 		char auth_hdr[2048], date_hdr[128], token_hdr[1024];
 		char range_canon[128];
@@ -244,10 +240,10 @@ static long long s3_read_range(void *backend_data, const char *url,
 		    offset, offset + length - 1);
 
 		aws_sigv4_sign(s3, "GET", s3->object_key, "",
-		    empty_hash, range_canon, offset, offset + length - 1,
-		    auth_hdr, sizeof(auth_hdr),
-		    date_hdr, sizeof(date_hdr),
-		    token_hdr, sizeof(token_hdr));
+			empty_hash, range_canon, offset, offset + length - 1,
+			auth_hdr, sizeof(auth_hdr),
+			date_hdr, sizeof(date_hdr),
+			token_hdr, sizeof(token_hdr));
 
 		headers = curl_slist_append(headers, auth_hdr);
 		headers = curl_slist_append(headers, date_hdr);
@@ -257,7 +253,7 @@ static long long s3_read_range(void *backend_data, const char *url,
 		headers = curl_slist_append(headers, sha_hdr);
 
 		if (token_hdr[0])
-		    headers = curl_slist_append(headers, token_hdr);
+			headers = curl_slist_append(headers, token_hdr);
 	}
 
 	char range_hdr[256];
@@ -319,14 +315,14 @@ static long long s3_get_size(void *backend_data, const char *url)
 	if (s3->access_key[0] && s3->secret_key[0])
 	{
 		static const char *empty_hash =
-		    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 		char auth_hdr[2048], date_hdr[128], token_hdr[1024];
 		aws_sigv4_sign(s3, "HEAD", s3->object_key, "",
-		    empty_hash, NULL, 0, 0,
-		    auth_hdr, sizeof(auth_hdr),
-		    date_hdr, sizeof(date_hdr),
-		    token_hdr, sizeof(token_hdr));
+			empty_hash, NULL, 0, 0,
+			auth_hdr, sizeof(auth_hdr),
+			date_hdr, sizeof(date_hdr),
+			token_hdr, sizeof(token_hdr));
 
 		headers = curl_slist_append(headers, auth_hdr);
 		headers = curl_slist_append(headers, date_hdr);
@@ -336,7 +332,7 @@ static long long s3_get_size(void *backend_data, const char *url)
 		headers = curl_slist_append(headers, sha_hdr);
 
 		if (token_hdr[0])
-		    headers = curl_slist_append(headers, token_hdr);
+			headers = curl_slist_append(headers, token_hdr);
 	}
 
 	long long file_size = -1;

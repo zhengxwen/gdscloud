@@ -115,9 +115,7 @@ static int base64_encode(const unsigned char *input, size_t input_len,
 	{
 		memcpy(output, bptr->data, bptr->length);
 		output[bptr->length] = '\0';
-	}
-	else
-	{
+	} else {
 		BIO_free_all(bio);
 		return -1;
 	}
@@ -215,7 +213,7 @@ static long long azure_read_range(void *backend_data, const char *url,
 		// append SAS token to URL
 		char sep = (strchr(az->endpoint, '?') != NULL) ? '&' : '?';
 		snprintf(url_str, sizeof(url_str), "%s%c%s",
-		    az->endpoint, sep, az->sas_token);
+			az->endpoint, sep, az->sas_token);
 
 		char range_hdr[128];
 		snprintf(range_hdr, sizeof(range_hdr), "Range: %s", range_str);
@@ -226,9 +224,9 @@ static long long azure_read_range(void *backend_data, const char *url,
 		char auth_hdr[2048], date_hdr[128];
 		char resource_path[CLOUD_MAX_URL_LEN];
 		snprintf(resource_path, sizeof(resource_path),
-		    "/%s/%s", az->container, az->blob_name);
+			"/%s/%s", az->container, az->blob_name);
 		azure_sign_request(az, "GET", resource_path, range_str,
-		    auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
+			auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
 		headers = curl_slist_append(headers, auth_hdr);
 		headers = curl_slist_append(headers, date_hdr);
 		headers = curl_slist_append(headers, "x-ms-version: 2020-10-02");
@@ -282,16 +280,16 @@ static long long azure_get_size(void *backend_data, const char *url)
 	{
 		char sep = (strchr(az->endpoint, '?') != NULL) ? '&' : '?';
 		snprintf(url_str, sizeof(url_str), "%s%c%s",
-		    az->endpoint, sep, az->sas_token);
+			az->endpoint, sep, az->sas_token);
 	}
 	else if (az->account_key[0])
 	{
 		char auth_hdr[2048], date_hdr[128];
 		char resource_path[CLOUD_MAX_URL_LEN];
 		snprintf(resource_path, sizeof(resource_path),
-		    "/%s/%s", az->container, az->blob_name);
+			"/%s/%s", az->container, az->blob_name);
 		azure_sign_request(az, "HEAD", resource_path, NULL,
-		    auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
+			auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
 		headers = curl_slist_append(headers, auth_hdr);
 		headers = curl_slist_append(headers, date_hdr);
 		headers = curl_slist_append(headers, "x-ms-version: 2020-10-02");
