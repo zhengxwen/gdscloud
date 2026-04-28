@@ -10,6 +10,7 @@
 // ===========================================================
 
 #include "cloud_stream.h"
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -158,6 +159,51 @@ void cache_clear_all(BlockCache *bc)
 
 
 // =====================================================================
+// Error formatting helper
+// =====================================================================
+
+void cloud_format_error(char *out, size_t out_size,
+	const char *prefix, const char *endpoint,
+	CURLcode res, long http_code,
+	const unsigned char *body, long long body_len)
+{
+	if (!out || out_size == 0) return;
+	out[0] = '\0';
+
+	if (res != CURLE_OK)
+	{
+		snprintf(out, out_size, "%s: curl error accessing '%s': %s",
+			prefix, endpoint, curl_easy_strerror(res));
+		return;
+	}
+
+	// truncate body at 1024 chars
+	if (body && body_len > 0)
+	{
+		char body_snippet[1025];
+		long long copy_len = (body_len > 1024) ? 1024 : body_len;
+		memcpy(body_snippet, body, (size_t)copy_len);
+		body_snippet[copy_len] = '\0';
+		if (body_len > 1024)
+		{
+			snprintf(out, out_size,
+				"%s: HTTP %ld accessing '%s'. Server response: %s... [truncated]",
+				prefix, http_code, endpoint, body_snippet);
+		} else {
+			snprintf(out, out_size,
+				"%s: HTTP %ld accessing '%s'. Server response: %s",
+				prefix, http_code, endpoint, body_snippet);
+		}
+	}
+	else
+	{
+		snprintf(out, out_size, "%s: HTTP %ld accessing '%s'",
+			prefix, http_code, endpoint);
+	}
+}
+
+
+// =====================================================================
 // Cloud stream implementation
 // =====================================================================
 
@@ -193,7 +239,19 @@ long long cloud_stream_read(CloudStream *cs, void *buffer, long long count)
 	if (cs->file_size < 0)
 	{
 		cs->file_size = cs->backend.get_size(cs->backend_data, cs->url);
-		if (cs->file_size < 0) return -1;
+		if (cs->file_size < 0)
+		{
+			if (cs->backend.get_last_error)
+			{
+				const char *err = cs->backend.get_last_error(cs->backend_data);
+				if (err && err[0])
+				{
+					strncpy(cs->last_error, err, CLOUD_MAX_ERROR_LEN - 1);
+					cs->last_error[CLOUD_MAX_ERROR_LEN - 1] = '\0';
+				}
+			}
+			return -1;
+		}
 	}
 
 	// clamp to remaining bytes
@@ -226,6 +284,15 @@ long long cloud_stream_read(CloudStream *cs, void *buffer, long long count)
 				cs->url, block_offset, fetch_size, tmpbuf);
 			if (got <= 0)
 			{
+				if (cs->backend.get_last_error)
+				{
+					const char *err = cs->backend.get_last_error(cs->backend_data);
+					if (err && err[0])
+					{
+						strncpy(cs->last_error, err, CLOUD_MAX_ERROR_LEN - 1);
+						cs->last_error[CLOUD_MAX_ERROR_LEN - 1] = '\0';
+					}
+				}
 				free(tmpbuf);
 				return (total_read > 0) ? total_read : -1;
 			}
@@ -258,7 +325,19 @@ long long cloud_stream_seek(CloudStream *cs, long long offset, int origin)
 	if (cs->file_size < 0 && origin == 2)
 	{
 		cs->file_size = cs->backend.get_size(cs->backend_data, cs->url);
-		if (cs->file_size < 0) return -1;
+		if (cs->file_size < 0)
+		{
+			if (cs->backend.get_last_error)
+			{
+				const char *err = cs->backend.get_last_error(cs->backend_data);
+				if (err && err[0])
+				{
+					strncpy(cs->last_error, err, CLOUD_MAX_ERROR_LEN - 1);
+					cs->last_error[CLOUD_MAX_ERROR_LEN - 1] = '\0';
+				}
+			}
+			return -1;
+		}
 	}
 
 	long long new_pos;
@@ -288,8 +367,23 @@ long long cloud_stream_getsize(CloudStream *cs)
 	if (cs->file_size < 0)
 	{
 		cs->file_size = cs->backend.get_size(cs->backend_data, cs->url);
+		if (cs->file_size < 0 && cs->backend.get_last_error)
+		{
+			const char *err = cs->backend.get_last_error(cs->backend_data);
+			if (err && err[0])
+			{
+				strncpy(cs->last_error, err, CLOUD_MAX_ERROR_LEN - 1);
+				cs->last_error[CLOUD_MAX_ERROR_LEN - 1] = '\0';
+			}
+		}
 	}
 	return cs->file_size;
+}
+
+const char *cloud_stream_get_last_error(CloudStream *cs)
+{
+	if (!cs) return "";
+	return cs->last_error;
 }
 
 void cloud_stream_close(CloudStream *cs)

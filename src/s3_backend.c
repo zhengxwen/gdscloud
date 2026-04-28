@@ -37,6 +37,7 @@ typedef struct S3BackendData {
 	char object_key[CLOUD_MAX_URL_LEN];
 	char endpoint[CLOUD_MAX_URL_LEN];  // resolved HTTPS endpoint
 	CURL *curl;
+	char last_error[CLOUD_MAX_ERROR_LEN];
 } S3BackendData;
 
 
@@ -276,11 +277,21 @@ static long long s3_read_range(void *backend_data, const char *url,
 	CURLcode res = curl_easy_perform(s3->curl);
 	curl_slist_free_all(headers);
 
-	if (res != CURLE_OK) return -1;
+	if (res != CURLE_OK)
+	{
+		cloud_format_error(s3->last_error, sizeof(s3->last_error),
+			"S3", s3->endpoint, res, 0, NULL, 0);
+		return -1;
+	}
 
 	long http_code = 0;
 	curl_easy_getinfo(s3->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200 && http_code != 206) return -1;
+	if (http_code != 200 && http_code != 206)
+	{
+		cloud_format_error(s3->last_error, sizeof(s3->last_error),
+			"S3", s3->endpoint, CURLE_OK, http_code, cb.buf, cb.size);
+		return -1;
+	}
 
 	return cb.size;
 }
@@ -349,11 +360,21 @@ static long long s3_get_size(void *backend_data, const char *url)
 	CURLcode res = curl_easy_perform(s3->curl);
 	curl_slist_free_all(headers);
 
-	if (res != CURLE_OK) return -1;
+	if (res != CURLE_OK)
+	{
+		cloud_format_error(s3->last_error, sizeof(s3->last_error),
+			"S3", s3->endpoint, res, 0, NULL, 0);
+		return -1;
+	}
 
 	long http_code = 0;
 	curl_easy_getinfo(s3->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200) return -1;
+	if (http_code != 200)
+	{
+		cloud_format_error(s3->last_error, sizeof(s3->last_error),
+			"S3", s3->endpoint, CURLE_OK, http_code, NULL, 0);
+		return -1;
+	}
 
 	return file_size;
 }
@@ -442,11 +463,23 @@ S3BackendData *s3_backend_create(const char *s3_url,
 
 
 // =====================================================================
+// S3 backend: get_last_error
+// =====================================================================
+
+static const char *s3_get_last_error(void *backend_data)
+{
+	S3BackendData *s3 = (S3BackendData *)backend_data;
+	return s3 ? s3->last_error : "";
+}
+
+
+// =====================================================================
 // S3 backend vtable
 // =====================================================================
 
 CloudBackend s3_backend_vtable = {
-	.read_range = s3_read_range,
-	.get_size   = s3_get_size,
-	.close      = s3_close
+	.read_range     = s3_read_range,
+	.get_size       = s3_get_size,
+	.close          = s3_close,
+	.get_last_error = s3_get_last_error
 };

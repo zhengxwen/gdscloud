@@ -33,6 +33,8 @@ extern "C" {
 #define CLOUD_MAX_URL_LEN       4096
 /// Maximum credential string length
 #define CLOUD_MAX_CRED_LEN      1024
+/// Maximum error message length
+#define CLOUD_MAX_ERROR_LEN     4096
 
 
 // =====================================================================
@@ -70,6 +72,8 @@ typedef struct CloudBackend {
 	long long (*get_size)(void *backend_data, const char *url);
 	/// Free backend resources
 	void (*close)(void *backend_data);
+	/// Get last error message; may return NULL or empty string
+	const char *(*get_last_error)(void *backend_data);
 } CloudBackend;
 
 
@@ -84,6 +88,7 @@ typedef struct CloudStream {
 	BlockCache cache;                // block cache
 	CloudBackend backend;            // backend function pointers
 	void *backend_data;              // backend-specific state
+	char last_error[CLOUD_MAX_ERROR_LEN];  // last error message
 } CloudStream;
 
 
@@ -107,6 +112,15 @@ long long cloud_stream_getsize(CloudStream *cs);
 
 /// Close and free the cloud stream
 void cloud_stream_close(CloudStream *cs);
+
+/// Get the last error message (empty string if none)
+const char *cloud_stream_get_last_error(CloudStream *cs);
+
+/// Format a cloud backend error message (helper for backends)
+void cloud_format_error(char *out, size_t out_size,
+	const char *prefix, const char *endpoint,
+	CURLcode res, long http_code,
+	const unsigned char *body, long long body_len);
 
 
 // =====================================================================

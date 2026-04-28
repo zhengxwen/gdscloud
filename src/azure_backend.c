@@ -37,6 +37,7 @@ typedef struct AzureBackendData {
 	char blob_name[CLOUD_MAX_URL_LEN];
 	char endpoint[CLOUD_MAX_URL_LEN];
 	CURL *curl;
+	char last_error[CLOUD_MAX_ERROR_LEN];
 } AzureBackendData;
 
 
@@ -252,11 +253,21 @@ static long long azure_read_range(void *backend_data, const char *url,
 	CURLcode res = curl_easy_perform(az->curl);
 	curl_slist_free_all(headers);
 
-	if (res != CURLE_OK) return -1;
+	if (res != CURLE_OK)
+	{
+		cloud_format_error(az->last_error, sizeof(az->last_error),
+			"Azure", az->endpoint, res, 0, NULL, 0);
+		return -1;
+	}
 
 	long http_code = 0;
 	curl_easy_getinfo(az->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200 && http_code != 206) return -1;
+	if (http_code != 200 && http_code != 206)
+	{
+		cloud_format_error(az->last_error, sizeof(az->last_error),
+			"Azure", az->endpoint, CURLE_OK, http_code, cb.buf, cb.size);
+		return -1;
+	}
 
 	return cb.size;
 }
@@ -309,11 +320,21 @@ static long long azure_get_size(void *backend_data, const char *url)
 	CURLcode res = curl_easy_perform(az->curl);
 	curl_slist_free_all(headers);
 
-	if (res != CURLE_OK) return -1;
+	if (res != CURLE_OK)
+	{
+		cloud_format_error(az->last_error, sizeof(az->last_error),
+			"Azure", az->endpoint, res, 0, NULL, 0);
+		return -1;
+	}
 
 	long http_code = 0;
 	curl_easy_getinfo(az->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200) return -1;
+	if (http_code != 200)
+	{
+		cloud_format_error(az->last_error, sizeof(az->last_error),
+			"Azure", az->endpoint, CURLE_OK, http_code, NULL, 0);
+		return -1;
+	}
 
 	return file_size;
 }
@@ -389,11 +410,23 @@ AzureBackendData *azure_backend_create(const char *az_url,
 
 
 // =====================================================================
+// Azure backend: get_last_error
+// =====================================================================
+
+static const char *azure_get_last_error(void *backend_data)
+{
+	AzureBackendData *az = (AzureBackendData *)backend_data;
+	return az ? az->last_error : "";
+}
+
+
+// =====================================================================
 // Azure backend vtable
 // =====================================================================
 
 CloudBackend azure_backend_vtable = {
-	.read_range = azure_read_range,
-	.get_size   = azure_get_size,
-	.close      = azure_close
+	.read_range     = azure_read_range,
+	.get_size       = azure_get_size,
+	.close          = azure_close,
+	.get_last_error = azure_get_last_error
 };

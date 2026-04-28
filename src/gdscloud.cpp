@@ -149,6 +149,16 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
 		}
 
+		// pre-check file access to get detailed error on failure
+		if (cloud_stream_getsize(cs) < 0)
+		{
+			const char *err = cloud_stream_get_last_error(cs);
+			std::string msg = (err && err[0]) ? std::string(err)
+				: std::string("Failed to access '") + c_url + "'";
+			cloud_stream_close(cs);
+			throw ErrGDSCloud(msg);
+		}
+
 		// open via gdsfmt callback API
 		PdGDSFile file = GDS_File_Open_Callback(
 			(TdCbStreamRead)gdscloud_cb_read,
@@ -203,6 +213,16 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 		{
 			gcs_backend_vtable.close(gcs);
 			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
+		}
+
+		// pre-check file access to get detailed error on failure
+		if (cloud_stream_getsize(cs) < 0)
+		{
+			const char *err = cloud_stream_get_last_error(cs);
+			std::string msg = (err && err[0]) ? std::string(err)
+				: std::string("Failed to access '") + c_url + "'";
+			cloud_stream_close(cs);
+			throw ErrGDSCloud(msg);
 		}
 
 		PdGDSFile file = GDS_File_Open_Callback(
@@ -263,6 +283,16 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 		{
 			azure_backend_vtable.close(az);
 			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
+		}
+
+		// pre-check file access to get detailed error on failure
+		if (cloud_stream_getsize(cs) < 0)
+		{
+			const char *err = cloud_stream_get_last_error(cs);
+			std::string msg = (err && err[0]) ? std::string(err)
+				: std::string("Failed to access '") + c_url + "'";
+			cloud_stream_close(cs);
+			throw ErrGDSCloud(msg);
 		}
 
 		PdGDSFile file = GDS_File_Open_Callback(

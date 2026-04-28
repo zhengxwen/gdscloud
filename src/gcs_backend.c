@@ -29,6 +29,7 @@ typedef struct GCSBackendData {
 	char object_key[CLOUD_MAX_URL_LEN];
 	char endpoint[CLOUD_MAX_URL_LEN];
 	CURL *curl;
+	char last_error[CLOUD_MAX_ERROR_LEN];
 } GCSBackendData;
 
 
@@ -141,11 +142,21 @@ static long long gcs_read_range(void *backend_data, const char *url,
 	CURLcode res = curl_easy_perform(gcs->curl);
 	curl_slist_free_all(headers);
 
-	if (res != CURLE_OK) return -1;
+	if (res != CURLE_OK)
+	{
+		cloud_format_error(gcs->last_error, sizeof(gcs->last_error),
+			"GCS", gcs->endpoint, res, 0, NULL, 0);
+		return -1;
+	}
 
 	long http_code = 0;
 	curl_easy_getinfo(gcs->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200 && http_code != 206) return -1;
+	if (http_code != 200 && http_code != 206)
+	{
+		cloud_format_error(gcs->last_error, sizeof(gcs->last_error),
+			"GCS", gcs->endpoint, CURLE_OK, http_code, cb.buf, cb.size);
+		return -1;
+	}
 
 	return cb.size;
 }
@@ -183,11 +194,21 @@ static long long gcs_get_size(void *backend_data, const char *url)
 	CURLcode res = curl_easy_perform(gcs->curl);
 	curl_slist_free_all(headers);
 
-	if (res != CURLE_OK) return -1;
+	if (res != CURLE_OK)
+	{
+		cloud_format_error(gcs->last_error, sizeof(gcs->last_error),
+			"GCS", gcs->endpoint, res, 0, NULL, 0);
+		return -1;
+	}
 
 	long http_code = 0;
 	curl_easy_getinfo(gcs->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200) return -1;
+	if (http_code != 200)
+	{
+		cloud_format_error(gcs->last_error, sizeof(gcs->last_error),
+			"GCS", gcs->endpoint, CURLE_OK, http_code, NULL, 0);
+		return -1;
+	}
 
 	return file_size;
 }
@@ -257,11 +278,23 @@ GCSBackendData *gcs_backend_create(const char *gs_url,
 
 
 // =====================================================================
+// GCS backend: get_last_error
+// =====================================================================
+
+static const char *gcs_get_last_error(void *backend_data)
+{
+	GCSBackendData *gcs = (GCSBackendData *)backend_data;
+	return gcs ? gcs->last_error : "";
+}
+
+
+// =====================================================================
 // GCS backend vtable
 // =====================================================================
 
 CloudBackend gcs_backend_vtable = {
-	.read_range = gcs_read_range,
-	.get_size   = gcs_get_size,
-	.close      = gcs_close
+	.read_range     = gcs_read_range,
+	.get_size       = gcs_get_size,
+	.close          = gcs_close,
+	.get_last_error = gcs_get_last_error
 };
