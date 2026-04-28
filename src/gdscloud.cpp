@@ -41,40 +41,6 @@ extern CloudBackend azure_backend_vtable;
 } // extern "C"
 
 
-// =====================================================================
-// Callback functions matching gdsfmt's TdCbStream* signatures
-// =====================================================================
-
-/// Read callback: user_data is a CloudStream*
-static ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data)
-{
-	CloudStream *cs = (CloudStream *)user_data;
-	long long result = cloud_stream_read(cs, buffer, (long long)count);
-	return (ssize_t)result;
-}
-
-/// Seek callback: origin matches TdSysSeekOrg (0=begin, 1=current, 2=end)
-static long long gdscloud_cb_seek(long long offset, int origin, void *user_data)
-{
-	CloudStream *cs = (CloudStream *)user_data;
-	return cloud_stream_seek(cs, offset, origin);
-}
-
-/// GetSize callback
-static long long gdscloud_cb_getsize(void *user_data)
-{
-	CloudStream *cs = (CloudStream *)user_data;
-	return cloud_stream_getsize(cs);
-}
-
-/// Close callback
-static void gdscloud_cb_close(void *user_data)
-{
-	CloudStream *cs = (CloudStream *)user_data;
-	cloud_stream_close(cs);
-}
-
-
 // ===========================================================
 // Define Exception
 // ===========================================================
@@ -91,6 +57,57 @@ public:
 	ErrGDSCloud(const std::string &msg): ErrCoreArray()
 		{ fMessage = msg; }
 };
+
+
+// =====================================================================
+// Callback functions matching gdsfmt's TdCbStream* signatures
+// =====================================================================
+
+/// Read callback: user_data is a CloudStream*
+static ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data)
+{
+	CloudStream *cs = (CloudStream *)user_data;
+	long long result = cloud_stream_read(cs, buffer, (long long)count);
+	if (result < 0)
+	{
+		const char *err = cloud_stream_get_last_error(cs);
+		if (err && err[0])
+			throw ErrGDSCloud("Cloud stream read error: %s", err);
+		else
+			throw ErrGDSCloud("Cloud stream read error");
+	}
+	return (ssize_t)result;
+}
+
+/// Seek callback: origin matches TdSysSeekOrg (0=begin, 1=current, 2=end)
+static long long gdscloud_cb_seek(long long offset, int origin, void *user_data)
+{
+	CloudStream *cs = (CloudStream *)user_data;
+	return cloud_stream_seek(cs, offset, origin);
+}
+
+/// GetSize callback
+static long long gdscloud_cb_getsize(void *user_data)
+{
+	CloudStream *cs = (CloudStream *)user_data;
+	long long result = cloud_stream_getsize(cs);
+	if (result < 0)
+	{
+		const char *err = cloud_stream_get_last_error(cs);
+		if (err && err[0])
+			throw ErrGDSCloud("Cloud stream get size error: %s", err);
+		else
+			throw ErrGDSCloud("Cloud stream get size error");
+	}
+	return result;
+}
+
+/// Close callback
+static void gdscloud_cb_close(void *user_data)
+{
+	CloudStream *cs = (CloudStream *)user_data;
+	cloud_stream_close(cs);
+}
 
 
 // =====================================================================
