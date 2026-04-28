@@ -38,11 +38,11 @@ Add cloud storage (S3, GCS, Azure Blob) read-only access to GDS files. The appro
 
 ### Phase 5: gdscloud R Implementation
 
-13. **Cloud open function** — `gdscloud/R/cloud_open.r` with `cloud.open.gds(url, ...)`. Parses URL scheme, calls appropriate C entry point, returns `gds.class` object.
+13. **Cloud open function** — `gdscloud/R/cloud_open.r` with `gdsCloudOpen(url, ...)`. Parses URL scheme, calls appropriate C entry point, returns `gds.class` object.
 
-14. **Credential configuration** — `gdscloud/R/credentials.r`: `gds.cloud.config.s3()` for AWS, `.gcs()` for GCS, `.azure()` for Azure. Falls back to env vars.
+14. **Credential configuration** — `gdscloud/R/credentials.r`: `gdsCloudConfigS3()` for AWS, `gdsCloudConfigGCS()` for GCS, `gdsCloudConfigAzure()` for Azure. Falls back to env vars.
 
-15. **Cache control** — `gdscloud/R/cache.r`: `gds.cloud.cache_size()`, `gds.cloud.cache_clear()`, `gds.cloud.info()`.
+15. **Cache control** — `gdscloud/R/cache.r`: `gdsCloudCacheSize()`, `gdsCloudCacheClear()`, `gdsCloudInfo()`.
 
 16. **Handler registration** — `gdscloud/R/zzz.r` `.onLoad()` calls `gdsfmt:::.gds_register_cloud_handler("s3", ...)` etc., so `openfn.gds("s3://...")` works transparently.
 
