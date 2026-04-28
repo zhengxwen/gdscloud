@@ -254,31 +254,35 @@ static long long s3_read_range(void *backend_data, const char *url,
     snprintf(range_str, sizeof(range_str), "bytes=%lld-%lld",
         offset, offset + length - 1);
 
-    // empty payload hash
-    static const char *empty_hash =
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-
-    char auth_hdr[2048], date_hdr[128], token_hdr[1024];
-    char range_canon[128];
-    snprintf(range_canon, sizeof(range_canon), "bytes=%lld-%lld",
-        offset, offset + length - 1);
-
-    aws_sigv4_sign(s3, "GET", s3->object_key, "",
-        empty_hash, range_canon, offset, offset + length - 1,
-        auth_hdr, sizeof(auth_hdr),
-        date_hdr, sizeof(date_hdr),
-        token_hdr, sizeof(token_hdr));
-
     struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, auth_hdr);
-    headers = curl_slist_append(headers, date_hdr);
 
-    char sha_hdr[256];
-    snprintf(sha_hdr, sizeof(sha_hdr), "x-amz-content-sha256: %s", empty_hash);
-    headers = curl_slist_append(headers, sha_hdr);
+    // only sign the request when credentials are provided
+    if (s3->access_key[0] && s3->secret_key[0])
+    {
+        static const char *empty_hash =
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-    if (token_hdr[0])
-        headers = curl_slist_append(headers, token_hdr);
+        char auth_hdr[2048], date_hdr[128], token_hdr[1024];
+        char range_canon[128];
+        snprintf(range_canon, sizeof(range_canon), "bytes=%lld-%lld",
+            offset, offset + length - 1);
+
+        aws_sigv4_sign(s3, "GET", s3->object_key, "",
+            empty_hash, range_canon, offset, offset + length - 1,
+            auth_hdr, sizeof(auth_hdr),
+            date_hdr, sizeof(date_hdr),
+            token_hdr, sizeof(token_hdr));
+
+        headers = curl_slist_append(headers, auth_hdr);
+        headers = curl_slist_append(headers, date_hdr);
+
+        char sha_hdr[256];
+        snprintf(sha_hdr, sizeof(sha_hdr), "x-amz-content-sha256: %s", empty_hash);
+        headers = curl_slist_append(headers, sha_hdr);
+
+        if (token_hdr[0])
+            headers = curl_slist_append(headers, token_hdr);
+    }
 
     char range_hdr[256];
     snprintf(range_hdr, sizeof(range_hdr), "Range: %s", range_str);
@@ -333,26 +337,31 @@ static long long s3_get_size(void *backend_data, const char *url)
     S3BackendData *s3 = (S3BackendData *)backend_data;
     if (!s3->curl) return -1;
 
-    static const char *empty_hash =
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-
-    char auth_hdr[2048], date_hdr[128], token_hdr[1024];
-    aws_sigv4_sign(s3, "HEAD", s3->object_key, "",
-        empty_hash, NULL, 0, 0,
-        auth_hdr, sizeof(auth_hdr),
-        date_hdr, sizeof(date_hdr),
-        token_hdr, sizeof(token_hdr));
-
     struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, auth_hdr);
-    headers = curl_slist_append(headers, date_hdr);
 
-    char sha_hdr[256];
-    snprintf(sha_hdr, sizeof(sha_hdr), "x-amz-content-sha256: %s", empty_hash);
-    headers = curl_slist_append(headers, sha_hdr);
+    // only sign the request when credentials are provided
+    if (s3->access_key[0] && s3->secret_key[0])
+    {
+        static const char *empty_hash =
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-    if (token_hdr[0])
-        headers = curl_slist_append(headers, token_hdr);
+        char auth_hdr[2048], date_hdr[128], token_hdr[1024];
+        aws_sigv4_sign(s3, "HEAD", s3->object_key, "",
+            empty_hash, NULL, 0, 0,
+            auth_hdr, sizeof(auth_hdr),
+            date_hdr, sizeof(date_hdr),
+            token_hdr, sizeof(token_hdr));
+
+        headers = curl_slist_append(headers, auth_hdr);
+        headers = curl_slist_append(headers, date_hdr);
+
+        char sha_hdr[256];
+        snprintf(sha_hdr, sizeof(sha_hdr), "x-amz-content-sha256: %s", empty_hash);
+        headers = curl_slist_append(headers, sha_hdr);
+
+        if (token_hdr[0])
+            headers = curl_slist_append(headers, token_hdr);
+    }
 
     long long file_size = -1;
 
