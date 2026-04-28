@@ -15,7 +15,7 @@
 .onLoad <- function(libname, pkgname)
 {
     # default settings
-    .gdscloud_env$cache_size_mb <- 64
+    .gdscloud_env$cache_size_mb <- 64L
 
     # register URL scheme handlers with gdsfmt
     if (requireNamespace("gdsfmt", quietly=TRUE))

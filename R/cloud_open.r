@@ -46,7 +46,7 @@ cloud.open.gds <- function(url, allow.error=FALSE)
     .Call(gdscloud_open_s3, url,
         cred$access_key, cred$secret_key,
         cred$region, cred$session_token,
-        as.double(cache_mb))
+        cache_mb)
 }
 
 
@@ -60,7 +60,7 @@ cloud.open.gds <- function(url, allow.error=FALSE)
     # Call C function with credentials and cache size
     .Call(gdscloud_open_gcs, url,
         cred$access_token,
-        as.double(cache_mb))
+        cache_mb)
 }
 
 
@@ -75,5 +75,5 @@ cloud.open.gds <- function(url, allow.error=FALSE)
     .Call(gdscloud_open_azure, url,
         cred$account_name, cred$account_key,
         cred$sas_token,
-        as.double(cache_mb))
+        cache_mb)
 }
