@@ -20,9 +20,8 @@
 #include <R.h>
 #include <Rinternals.h>
 
-// OpenSSL for HMAC-SHA256
-#include <openssl/hmac.h>
-#include <openssl/sha.h>
+// Portable OpenSSL helpers (SHA-256 + HMAC-SHA256)
+#include "openssl_compat.h"
 
 
 // =====================================================================
@@ -82,30 +81,7 @@ static void hex_encode(const unsigned char *in, size_t len, char *out)
 }
 
 
-// =====================================================================
-// Helper: SHA-256 hash
-// =====================================================================
-
-static void sha256_hash(const unsigned char *data, size_t len,
-    unsigned char *out)
-{
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, data, len);
-    SHA256_Final(out, &ctx);
-}
-
-
-// =====================================================================
-// Helper: HMAC-SHA256
-// =====================================================================
-
-static void hmac_sha256(const unsigned char *key, size_t key_len,
-    const unsigned char *data, size_t data_len, unsigned char *out)
-{
-    unsigned int len = 32;
-    HMAC(EVP_sha256(), key, (int)key_len, data, data_len, out, &len);
-}
+// SHA-256 and HMAC-SHA256 provided by openssl_compat.h
 
 
 // =====================================================================

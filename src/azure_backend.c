@@ -19,11 +19,9 @@
 #include <R.h>
 #include <Rinternals.h>
 
-// OpenSSL for HMAC-SHA256 (for Shared Key auth)
-#include <openssl/hmac.h>
-#include <openssl/sha.h>
+// Portable OpenSSL helpers (HMAC-SHA256)
+#include "openssl_compat.h"
 #include <openssl/bio.h>
-#include <openssl/evp.h>
 #include <openssl/buffer.h>
 
 
@@ -179,10 +177,9 @@ static void azure_sign_request(AzureBackendData *az, const char *method,
 
     // HMAC-SHA256
     unsigned char sig[32];
+    hmac_sha256(key_bytes, key_len,
+        (unsigned char *)string_to_sign, strlen(string_to_sign), sig);
     unsigned int sig_len = 32;
-    HMAC(EVP_sha256(), key_bytes, (int)key_len,
-        (unsigned char *)string_to_sign, strlen(string_to_sign),
-        sig, &sig_len);
 
     // base64 encode signature
     char sig_b64[128];
