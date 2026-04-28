@@ -11,13 +11,18 @@
 
 #include "cloud_stream.h"
 #include <R_GDS.h>
+#include <R_GDS_CPP.h>
 
 #include <R.h>
 #include <Rinternals.h>
 #include <R_ext/Rdynload.h>
 
+using namespace CoreArray;
 
-// External declarations from backend files
+
+// External declarations from C backend files
+extern "C" {
+
 typedef struct S3BackendData S3BackendData;
 extern S3BackendData *s3_backend_create(const char *s3_url,
     const char *access_key, const char *secret_key,
@@ -40,6 +45,8 @@ extern ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data);
 extern long long gdscloud_cb_seek(long long offset, int origin, void *user_data);
 extern long long gdscloud_cb_getsize(void *user_data);
 extern void gdscloud_cb_close(void *user_data);
+
+} // extern "C"
 
 
 // =====================================================================
@@ -94,7 +101,7 @@ static SEXP make_gds_class(PdGDSFile file, const char *url)
 // .Call: Open S3 GDS file
 // =====================================================================
 
-SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
+extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
     SEXP region, SEXP session_token, SEXP cache_size_mb)
 {
     const char *c_url = sexp_str(url);
@@ -104,38 +111,42 @@ SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
     const char *c_tok = sexp_str(session_token);
     double c_cache = Rf_asReal(cache_size_mb);
 
-    // create S3 backend
-    S3BackendData *s3 = s3_backend_create(c_url, c_ak, c_sk, c_rgn, c_tok);
-    if (!s3)
-        Rf_error("Failed to create S3 backend for '%s'", c_url);
+    COREARRAY_TRY
 
-    // create cloud stream with cache
-    long long max_cache = (long long)(c_cache * 1024 * 1024);
-    CloudStream *cs = cloud_stream_create(c_url,
-        &s3_backend_vtable, s3, CLOUD_BLOCK_SIZE, max_cache);
-    if (!cs)
-    {
-        s3_backend_vtable.close(s3);
-        Rf_error("Failed to create cloud stream for '%s'", c_url);
-    }
+        // create S3 backend
+        S3BackendData *s3 = s3_backend_create(c_url, c_ak, c_sk, c_rgn, c_tok);
+        if (!s3)
+            throw ErrCoreArray("Failed to create S3 backend for '%s'", c_url);
 
-    // open via gdsfmt callback API
-    PdGDSFile file = GDS_File_Open_Callback(
-        (TdCbStreamRead)gdscloud_cb_read,
-        (TdCbStreamWrite)NULL,
-        (TdCbStreamSeek)gdscloud_cb_seek,
-        (TdCbStreamGetSize)gdscloud_cb_getsize,
-        (TdCbStreamSetSize)NULL,
-        (TdCbStreamClose)gdscloud_cb_close,
-        cs, TRUE, FALSE);
+        // create cloud stream with cache
+        long long max_cache = (long long)(c_cache * 1024 * 1024);
+        CloudStream *cs = cloud_stream_create(c_url,
+            &s3_backend_vtable, s3, CLOUD_BLOCK_SIZE, max_cache);
+        if (!cs)
+        {
+            s3_backend_vtable.close(s3);
+            throw ErrCoreArray("Failed to create cloud stream for '%s'", c_url);
+        }
 
-    if (!file)
-    {
-        cloud_stream_close(cs);
-        Rf_error("Failed to open GDS file from '%s'", c_url);
-    }
+        // open via gdsfmt callback API
+        PdGDSFile file = GDS_File_Open_Callback(
+            (TdCbStreamRead)gdscloud_cb_read,
+            (TdCbStreamWrite)NULL,
+            (TdCbStreamSeek)gdscloud_cb_seek,
+            (TdCbStreamGetSize)gdscloud_cb_getsize,
+            (TdCbStreamSetSize)NULL,
+            (TdCbStreamClose)gdscloud_cb_close,
+            cs, TRUE, FALSE);
 
-    return make_gds_class(file, c_url);
+        if (!file)
+        {
+            cloud_stream_close(cs);
+            throw ErrCoreArray("Failed to open GDS file from '%s'", c_url);
+        }
+
+        rv_ans = make_gds_class(file, c_url);
+
+    COREARRAY_CATCH
 }
 
 
@@ -143,41 +154,45 @@ SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 // .Call: Open GCS GDS file
 // =====================================================================
 
-SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_mb)
+extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_mb)
 {
     const char *c_url = sexp_str(url);
     const char *c_tok = sexp_str(access_token);
     double c_cache = Rf_asReal(cache_size_mb);
 
-    GCSBackendData *gcs = gcs_backend_create(c_url, c_tok);
-    if (!gcs)
-        Rf_error("Failed to create GCS backend for '%s'", c_url);
+    COREARRAY_TRY
 
-    long long max_cache = (long long)(c_cache * 1024 * 1024);
-    CloudStream *cs = cloud_stream_create(c_url,
-        &gcs_backend_vtable, gcs, CLOUD_BLOCK_SIZE, max_cache);
-    if (!cs)
-    {
-        gcs_backend_vtable.close(gcs);
-        Rf_error("Failed to create cloud stream for '%s'", c_url);
-    }
+        GCSBackendData *gcs = gcs_backend_create(c_url, c_tok);
+        if (!gcs)
+            throw ErrCoreArray("Failed to create GCS backend for '%s'", c_url);
 
-    PdGDSFile file = GDS_File_Open_Callback(
-        (TdCbStreamRead)gdscloud_cb_read,
-        (TdCbStreamWrite)NULL,
-        (TdCbStreamSeek)gdscloud_cb_seek,
-        (TdCbStreamGetSize)gdscloud_cb_getsize,
-        (TdCbStreamSetSize)NULL,
-        (TdCbStreamClose)gdscloud_cb_close,
-        cs, TRUE, FALSE);
+        long long max_cache = (long long)(c_cache * 1024 * 1024);
+        CloudStream *cs = cloud_stream_create(c_url,
+            &gcs_backend_vtable, gcs, CLOUD_BLOCK_SIZE, max_cache);
+        if (!cs)
+        {
+            gcs_backend_vtable.close(gcs);
+            throw ErrCoreArray("Failed to create cloud stream for '%s'", c_url);
+        }
 
-    if (!file)
-    {
-        cloud_stream_close(cs);
-        Rf_error("Failed to open GDS file from '%s'", c_url);
-    }
+        PdGDSFile file = GDS_File_Open_Callback(
+            (TdCbStreamRead)gdscloud_cb_read,
+            (TdCbStreamWrite)NULL,
+            (TdCbStreamSeek)gdscloud_cb_seek,
+            (TdCbStreamGetSize)gdscloud_cb_getsize,
+            (TdCbStreamSetSize)NULL,
+            (TdCbStreamClose)gdscloud_cb_close,
+            cs, TRUE, FALSE);
 
-    return make_gds_class(file, c_url);
+        if (!file)
+        {
+            cloud_stream_close(cs);
+            throw ErrCoreArray("Failed to open GDS file from '%s'", c_url);
+        }
+
+        rv_ans = make_gds_class(file, c_url);
+
+    COREARRAY_CATCH
 }
 
 
@@ -185,7 +200,7 @@ SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_mb)
 // .Call: Open Azure GDS file
 // =====================================================================
 
-SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_key,
+extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_key,
     SEXP sas_token, SEXP cache_size_mb)
 {
     const char *c_url = sexp_str(url);
@@ -194,35 +209,39 @@ SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_key,
     const char *c_sas = sexp_str(sas_token);
     double c_cache = Rf_asReal(cache_size_mb);
 
-    AzureBackendData *az = azure_backend_create(c_url, c_acc, c_key, c_sas);
-    if (!az)
-        Rf_error("Failed to create Azure backend for '%s'", c_url);
+    COREARRAY_TRY
 
-    long long max_cache = (long long)(c_cache * 1024 * 1024);
-    CloudStream *cs = cloud_stream_create(c_url,
-        &azure_backend_vtable, az, CLOUD_BLOCK_SIZE, max_cache);
-    if (!cs)
-    {
-        azure_backend_vtable.close(az);
-        Rf_error("Failed to create cloud stream for '%s'", c_url);
-    }
+        AzureBackendData *az = azure_backend_create(c_url, c_acc, c_key, c_sas);
+        if (!az)
+            throw ErrCoreArray("Failed to create Azure backend for '%s'", c_url);
 
-    PdGDSFile file = GDS_File_Open_Callback(
-        (TdCbStreamRead)gdscloud_cb_read,
-        (TdCbStreamWrite)NULL,
-        (TdCbStreamSeek)gdscloud_cb_seek,
-        (TdCbStreamGetSize)gdscloud_cb_getsize,
-        (TdCbStreamSetSize)NULL,
-        (TdCbStreamClose)gdscloud_cb_close,
-        cs, TRUE, FALSE);
+        long long max_cache = (long long)(c_cache * 1024 * 1024);
+        CloudStream *cs = cloud_stream_create(c_url,
+            &azure_backend_vtable, az, CLOUD_BLOCK_SIZE, max_cache);
+        if (!cs)
+        {
+            azure_backend_vtable.close(az);
+            throw ErrCoreArray("Failed to create cloud stream for '%s'", c_url);
+        }
 
-    if (!file)
-    {
-        cloud_stream_close(cs);
-        Rf_error("Failed to open GDS file from '%s'", c_url);
-    }
+        PdGDSFile file = GDS_File_Open_Callback(
+            (TdCbStreamRead)gdscloud_cb_read,
+            (TdCbStreamWrite)NULL,
+            (TdCbStreamSeek)gdscloud_cb_seek,
+            (TdCbStreamGetSize)gdscloud_cb_getsize,
+            (TdCbStreamSetSize)NULL,
+            (TdCbStreamClose)gdscloud_cb_close,
+            cs, TRUE, FALSE);
 
-    return make_gds_class(file, c_url);
+        if (!file)
+        {
+            cloud_stream_close(cs);
+            throw ErrCoreArray("Failed to open GDS file from '%s'", c_url);
+        }
+
+        rv_ans = make_gds_class(file, c_url);
+
+    COREARRAY_CATCH
 }
 
 
@@ -231,7 +250,7 @@ SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_key,
 //        freed when streams close; this is a no-op for now)
 // =====================================================================
 
-SEXP gdscloud_cache_clear(void)
+extern "C" SEXP gdscloud_cache_clear(void)
 {
     // Individual stream caches are managed per-stream.
     // This function could maintain a global registry in the future.
@@ -243,7 +262,7 @@ SEXP gdscloud_cache_clear(void)
 // .Call: Cache info
 // =====================================================================
 
-SEXP gdscloud_cache_info(void)
+extern "C" SEXP gdscloud_cache_info(void)
 {
     // Return a basic list with global cache size setting
     SEXP ans = PROTECT(Rf_allocVector(VECSXP, 2));
