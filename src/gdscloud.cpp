@@ -82,37 +82,6 @@ static const char *sexp_str(SEXP x)
 // Helper: build the gds.class R list from a PdGDSFile
 // =====================================================================
 
-static SEXP make_gds_class(PdGDSFile file, const char *url)
-{
-    // mimics the return structure of gdsOpenGDS
-    SEXP ans = PROTECT(Rf_allocVector(VECSXP, 5));
-
-    // filename (the cloud URL)
-    SET_VECTOR_ELT(ans, 0, Rf_mkString(url));
-
-    // id (file index, query from gdsfmt internals is tricky;
-    // we use -1 as placeholder since the file is managed by gdsfmt)
-    // Actually GDS_File_Open_Callback stores in PKG_GDS_Files,
-    // but we don't have direct access to the index from here.
-    // The gds.class uses the ptr for most operations.
-    SET_VECTOR_ELT(ans, 1, Rf_ScalarInteger(-1));
-
-    // ptr (external pointer to the GDS file)
-    SEXP ptr = PROTECT(R_MakeExternalPtr(file, R_NilValue, R_NilValue));
-    SET_VECTOR_ELT(ans, 2, ptr);
-
-    // root (external pointer to root folder)
-    PdGDSFolder root = GDS_File_Root(file);
-    SET_VECTOR_ELT(ans, 3, GDS_R_Obj2SEXP((PdGDSObj)root));
-
-    // readonly
-    SET_VECTOR_ELT(ans, 4, Rf_ScalarLogical(TRUE));
-
-    UNPROTECT(2);
-    return ans;
-}
-
-
 // =====================================================================
 // .Call: Open S3 GDS file
 // =====================================================================
@@ -160,7 +129,7 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
             throw ErrGDSCloud("Failed to open GDS file from '%s'", c_url);
         }
 
-        rv_ans = make_gds_class(file, c_url);
+        rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
 
     COREARRAY_CATCH
 }
@@ -206,7 +175,7 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
             throw ErrGDSCloud("Failed to open GDS file from '%s'", c_url);
         }
 
-        rv_ans = make_gds_class(file, c_url);
+        rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
 
     COREARRAY_CATCH
 }
@@ -255,7 +224,7 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
             throw ErrGDSCloud("Failed to open GDS file from '%s'", c_url);
         }
 
-        rv_ans = make_gds_class(file, c_url);
+        rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
 
     COREARRAY_CATCH
 }
