@@ -33,9 +33,15 @@ static const R_CallMethodDef CallEntries[] = {
 };
 
 
+// defined in R_GDS2.h (included via R_gdscloud.c)
+extern void Init_GDS_Routines(void);
+
 void R_init_gdscloud(DllInfo *info)
 {
     // register .Call methods
     R_registerRoutines(info, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(info, FALSE);
+
+    // initialize gdsfmt function pointers (required before any GDS_* call)
+    Init_GDS_Routines();
 }
