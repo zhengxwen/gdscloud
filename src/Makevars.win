@@ -1,2 +1,2 @@
 PKG_CPPFLAGS = -I$(LIB_CURL)/include
-PKG_LIBS = -L$(LIB_CURL)/lib -lcurl -lssl -lcrypto -lz -lws2_32
+PKG_LIBS += -L$(LIB_CURL)/lib -lcurl -lssl -lcrypto -lz -lws2_32

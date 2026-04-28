@@ -10,8 +10,7 @@
 // ===========================================================
 
 #include "cloud_stream.h"
-#include <R_GDS2.h>
-#include <R_GDS_CPP.h>
+#include <R_GDS.h>
 
 #include <R.h>
 #include <Rinternals.h>

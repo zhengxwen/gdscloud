@@ -12,7 +12,6 @@
 #include <R.h>
 #include <Rinternals.h>
 #include <R_ext/Rdynload.h>
-#include <R_GDS2.h>
 
 
 // External declarations from gdscloud.c
@@ -39,7 +38,4 @@ void R_init_gdscloud(DllInfo *info)
     // register .Call methods
     R_registerRoutines(info, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(info, FALSE);
-
-    // initialize gdsfmt C function pointers
-    Init_GDS_Routines();
 }
