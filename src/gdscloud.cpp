@@ -38,13 +38,41 @@ extern AzureBackendData *azure_backend_create(const char *az_url,
     const char *sas_token);
 extern CloudBackend azure_backend_vtable;
 
-// External declarations from gds_callbacks.c
-extern ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data);
-extern long long gdscloud_cb_seek(long long offset, int origin, void *user_data);
-extern long long gdscloud_cb_getsize(void *user_data);
-extern void gdscloud_cb_close(void *user_data);
-
 } // extern "C"
+
+
+// =====================================================================
+// Callback functions matching gdsfmt's TdCbStream* signatures
+// =====================================================================
+
+/// Read callback: user_data is a CloudStream*
+static ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data)
+{
+    CloudStream *cs = (CloudStream *)user_data;
+    long long result = cloud_stream_read(cs, buffer, (long long)count);
+    return (ssize_t)result;
+}
+
+/// Seek callback: origin matches TdSysSeekOrg (0=begin, 1=current, 2=end)
+static long long gdscloud_cb_seek(long long offset, int origin, void *user_data)
+{
+    CloudStream *cs = (CloudStream *)user_data;
+    return cloud_stream_seek(cs, offset, origin);
+}
+
+/// GetSize callback
+static long long gdscloud_cb_getsize(void *user_data)
+{
+    CloudStream *cs = (CloudStream *)user_data;
+    return cloud_stream_getsize(cs);
+}
+
+/// Close callback
+static void gdscloud_cb_close(void *user_data)
+{
+    CloudStream *cs = (CloudStream *)user_data;
+    cloud_stream_close(cs);
+}
 
 
 // ===========================================================
@@ -98,6 +126,14 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 
     COREARRAY_TRY
 
+        // validate URL format
+        if (!c_url || !c_url[0])
+            throw ErrGDSCloud("S3 URL is empty or missing");
+        if (strncmp(c_url, "s3://", 5) != 0)
+            throw ErrGDSCloud("Invalid S3 URL '%s': must start with 's3://'", c_url);
+        if (!strchr(c_url + 5, '/'))
+            throw ErrGDSCloud("Invalid S3 URL '%s': missing object key (expected 's3://bucket/key')", c_url);
+
         // create S3 backend
         S3BackendData *s3 = s3_backend_create(c_url, c_ak, c_sk, c_rgn, c_tok);
         if (!s3)
@@ -126,7 +162,8 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
         if (!file)
         {
             cloud_stream_close(cs);
-            throw ErrGDSCloud("Failed to open GDS file from '%s'", c_url);
+            throw ErrGDSCloud("Failed to open GDS file from '%s': "
+                "the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
         }
 
         rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
@@ -146,6 +183,14 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
     double c_cache = Rf_asReal(cache_size_mb);
 
     COREARRAY_TRY
+
+        // validate URL format
+        if (!c_url || !c_url[0])
+            throw ErrGDSCloud("GCS URL is empty or missing");
+        if (strncmp(c_url, "gs://", 5) != 0)
+            throw ErrGDSCloud("Invalid GCS URL '%s': must start with 'gs://'", c_url);
+        if (!strchr(c_url + 5, '/'))
+            throw ErrGDSCloud("Invalid GCS URL '%s': missing object key (expected 'gs://bucket/key')", c_url);
 
         GCSBackendData *gcs = gcs_backend_create(c_url, c_tok);
         if (!gcs)
@@ -172,7 +217,8 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
         if (!file)
         {
             cloud_stream_close(cs);
-            throw ErrGDSCloud("Failed to open GDS file from '%s'", c_url);
+            throw ErrGDSCloud("Failed to open GDS file from '%s': "
+                "the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
         }
 
         rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
@@ -195,6 +241,16 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
     double c_cache = Rf_asReal(cache_size_mb);
 
     COREARRAY_TRY
+
+        // validate URL format
+        if (!c_url || !c_url[0])
+            throw ErrGDSCloud("Azure URL is empty or missing");
+        if (strncmp(c_url, "az://", 5) != 0)
+            throw ErrGDSCloud("Invalid Azure URL '%s': must start with 'az://'", c_url);
+        if (!strchr(c_url + 5, '/'))
+            throw ErrGDSCloud("Invalid Azure URL '%s': missing blob name (expected 'az://container/blob')", c_url);
+        if (!c_acc || !c_acc[0])
+            throw ErrGDSCloud("Azure account name is required for '%s'", c_url);
 
         AzureBackendData *az = azure_backend_create(c_url, c_acc, c_key, c_sas);
         if (!az)
@@ -221,7 +277,8 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
         if (!file)
         {
             cloud_stream_close(cs);
-            throw ErrGDSCloud("Failed to open GDS file from '%s'", c_url);
+            throw ErrGDSCloud("Failed to open GDS file from '%s': "
+                "the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
         }
 
         rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
