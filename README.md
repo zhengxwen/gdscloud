@@ -25,7 +25,7 @@ read.gdsn(index.gdsn(gds, "genotype"))
 closefn.gds(gds)
 
 # Or use the explicit function
-gds <- cloud.open.gds("s3://my-bucket/data/example.gds")
+gds <- gdsCloudOpen("s3://my-bucket/data/example.gds")
 closefn.gds(gds)
 ```
 
@@ -43,7 +43,7 @@ export AWS_SESSION_TOKEN=your_token
 
 Or configure in R:
 ```r
-gds.cloud.config.s3(
+gdsCloudConfigS3(
     aws_access_key_id = "your_key",
     aws_secret_access_key = "your_secret",
     region = "us-east-1"
@@ -57,7 +57,7 @@ export GCS_ACCESS_TOKEN=your_token
 
 Or:
 ```r
-gds.cloud.config.gcs(access_token = "your_token")
+gdsCloudConfigGCS(access_token = "your_token")
 ```
 
 ### Azure Blob Storage
@@ -70,20 +70,20 @@ export AZURE_STORAGE_SAS_TOKEN=your_sas
 
 Or:
 ```r
-gds.cloud.config.azure(account_name = "your_account", account_key = "your_key")
+gdsCloudConfigAzure(account_name = "your_account", account_key = "your_key")
 ```
 
 ## Cache Control
 
 ```r
 # Set cache size (default: 64MB)
-gds.cloud.cache_size(128)
+gdsCloudCacheSize(128)
 
 # Clear all caches
-gds.cloud.cache_clear()
+gdsCloudCacheClear()
 
 # Show cache statistics
-gds.cloud.info()
+gdsCloudInfo()
 ```
 
 ## System Requirements

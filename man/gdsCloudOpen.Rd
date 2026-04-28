@@ -1,5 +1,5 @@
-\name{cloud.open.gds}
-\alias{cloud.open.gds}
+\name{gdsCloudOpen}
+\alias{gdsCloudOpen}
 \title{Open a GDS File from Cloud Storage}
 \description{
     Opens a read-only GDS (Genomic Data Structure) file from cloud storage
@@ -7,7 +7,7 @@
     Storage.
 }
 \usage{
-cloud.open.gds(url, allow.error=FALSE)
+gdsCloudOpen(url, allow.error=FALSE)
 }
 \arguments{
     \item{url}{a character string specifying the cloud URL, e.g.,
@@ -33,20 +33,20 @@ cloud.open.gds(url, allow.error=FALSE)
     to this function.
 }
 \seealso{
-    \code{\link{gds.cloud.config.s3}}, \code{\link{gds.cloud.cache_size}},
+    \code{\link{gdsCloudConfigS3}}, \code{\link{gdsCloudCacheSize}},
     \code{\link[gdsfmt]{openfn.gds}}, \code{\link[gdsfmt]{closefn.gds}}
 }
 \examples{
 \dontrun{
 # Set AWS credentials
-gds.cloud.config.s3(
+gdsCloudConfigS3(
     aws_access_key_id = "AKIAIOSFODNN7EXAMPLE",
     aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     region = "us-east-1"
 )
 
 # Open from S3
-gds <- cloud.open.gds("s3://my-bucket/data/example.gds")
+gds <- gdsCloudOpen("s3://my-bucket/data/example.gds")
 read.gdsn(index.gdsn(gds, "genotype"))
 closefn.gds(gds)
 

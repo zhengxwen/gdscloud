@@ -12,7 +12,7 @@
 #############################################################
 # Open a GDS file from a cloud URL
 #
-cloud.open.gds <- function(url, allow.error=FALSE)
+gdsCloudOpen <- function(url, allow.error=FALSE)
 {
     stopifnot(is.character(url), length(url)==1L)
     stopifnot(is.logical(allow.error), length(allow.error)==1L)

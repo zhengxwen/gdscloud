@@ -12,7 +12,7 @@
 #############################################################
 # Set the default cache size for new cloud streams (in MB)
 #
-gds.cloud.cache_size <- function(size_mb=64)
+gdsCloudCacheSize <- function(size_mb=64)
 {
     stopifnot(is.numeric(size_mb), length(size_mb)==1L, size_mb > 0)
     .gdscloud_env$cache_size_mb <- size_mb
@@ -23,7 +23,7 @@ gds.cloud.cache_size <- function(size_mb=64)
 #############################################################
 # Clear all internal caches
 #
-gds.cloud.cache_clear <- function()
+gdsCloudCacheClear <- function()
 {
     .Call(gdscloud_cache_clear)
     invisible()
@@ -33,7 +33,7 @@ gds.cloud.cache_clear <- function()
 #############################################################
 # Show cache information and statistics
 #
-gds.cloud.info <- function()
+gdsCloudInfo <- function()
 {
     info <- .Call(gdscloud_cache_info)
     cat("gdscloud cache settings:\n")

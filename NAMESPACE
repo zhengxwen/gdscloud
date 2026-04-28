@@ -8,11 +8,11 @@ import(gdsfmt)
 
 # Export the following names
 export(
-    cloud.open.gds,
-    gds.cloud.config.s3,
-    gds.cloud.config.gcs,
-    gds.cloud.config.azure,
-    gds.cloud.cache_size,
-    gds.cloud.cache_clear,
-    gds.cloud.info
+    gdsCloudOpen,
+    gdsCloudConfigS3,
+    gdsCloudConfigGCS,
+    gdsCloudConfigAzure,
+    gdsCloudCacheSize,
+    gdsCloudCacheClear,
+    gdsCloudInfo
 )

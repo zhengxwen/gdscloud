@@ -12,7 +12,7 @@
 #############################################################
 # Configure AWS S3 credentials
 #
-gds.cloud.config.s3 <- function(aws_access_key_id=NULL,
+gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
     aws_secret_access_key=NULL, region=NULL, session_token=NULL)
 {
     if (!is.null(aws_access_key_id))
@@ -30,7 +30,7 @@ gds.cloud.config.s3 <- function(aws_access_key_id=NULL,
 #############################################################
 # Configure GCS credentials
 #
-gds.cloud.config.gcs <- function(access_token=NULL)
+gdsCloudConfigGCS <- function(access_token=NULL)
 {
     if (!is.null(access_token))
         .gdscloud_env$gcs_access_token <- access_token
@@ -41,7 +41,7 @@ gds.cloud.config.gcs <- function(access_token=NULL)
 #############################################################
 # Configure Azure credentials
 #
-gds.cloud.config.azure <- function(account_name=NULL, account_key=NULL,
+gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
     sas_token=NULL)
 {
     if (!is.null(account_name))

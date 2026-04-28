@@ -1,7 +1,7 @@
-\name{gds.cloud.config.s3}
-\alias{gds.cloud.config.s3}
-\alias{gds.cloud.config.gcs}
-\alias{gds.cloud.config.azure}
+\name{gdsCloudConfigS3}
+\alias{gdsCloudConfigS3}
+\alias{gdsCloudConfigGCS}
+\alias{gdsCloudConfigAzure}
 \title{Configure Cloud Storage Credentials}
 \description{
     Set authentication credentials for cloud storage access.
@@ -9,12 +9,12 @@
     variables.
 }
 \usage{
-gds.cloud.config.s3(aws_access_key_id=NULL, aws_secret_access_key=NULL,
+gdsCloudConfigS3(aws_access_key_id=NULL, aws_secret_access_key=NULL,
     region=NULL, session_token=NULL)
 
-gds.cloud.config.gcs(access_token=NULL)
+gdsCloudConfigGCS(access_token=NULL)
 
-gds.cloud.config.azure(account_name=NULL, account_key=NULL, sas_token=NULL)
+gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL)
 }
 \arguments{
     \item{aws_access_key_id}{AWS access key ID}
@@ -40,22 +40,22 @@ gds.cloud.config.azure(account_name=NULL, account_key=NULL, sas_token=NULL)
     None (invisible).
 }
 \seealso{
-    \code{\link{cloud.open.gds}}
+    \code{\link{gdsCloudOpen}}
 }
 \examples{
 \dontrun{
 # AWS S3
-gds.cloud.config.s3(
+gdsCloudConfigS3(
     aws_access_key_id = "your_key",
     aws_secret_access_key = "your_secret",
     region = "us-east-1"
 )
 
 # Google Cloud Storage
-gds.cloud.config.gcs(access_token = "ya29.example_token")
+gdsCloudConfigGCS(access_token = "ya29.example_token")
 
 # Azure Blob Storage
-gds.cloud.config.azure(
+gdsCloudConfigAzure(
     account_name = "mystorageaccount",
     account_key = "base64encodedkey=="
 )
