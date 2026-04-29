@@ -40,8 +40,3 @@
         }
     }
 }
-
-.onUnload <- function(libpath)
-{
-    library.dynam.unload("gdscloud", libpath)
-}
