@@ -14,6 +14,8 @@
 #include <R_ext/Rdynload.h>
 #include <curl/curl.h>
 
+#include "cloud_stream.h"
+
 
 // External declarations from gdscloud.c
 extern SEXP gdscloud_open_s3(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
@@ -48,6 +50,9 @@ void R_init_gdscloud(DllInfo *info)
 
 	// initialize libcurl (required before any curl_easy_* call)
 	curl_global_init(CURL_GLOBAL_ALL);
+
+	// initialize fork tracking (required for mclapply/forked processes)
+	cloud_init_fork_tracking();
 }
 
 void R_unload_gdscloud(DllInfo *info)

@@ -221,6 +221,7 @@ static long long s3_read_range(void *backend_data, const char *url,
 	long long offset, long long length, unsigned char *buffer)
 {
 	S3BackendData *s3 = (S3BackendData *)backend_data;
+	cloud_check_reinit_curl(&s3->curl);
 	if (!s3->curl) return -1;
 
 	char range_str[128];
@@ -318,6 +319,7 @@ static size_t curl_header_cb(char *buffer, size_t size, size_t nitems,
 static long long s3_get_size(void *backend_data, const char *url)
 {
 	S3BackendData *s3 = (S3BackendData *)backend_data;
+	cloud_check_reinit_curl(&s3->curl);
 	if (!s3->curl) return -1;
 
 	struct curl_slist *headers = NULL;

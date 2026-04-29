@@ -197,6 +197,7 @@ static long long azure_read_range(void *backend_data, const char *url,
 	long long offset, long long length, unsigned char *buffer)
 {
 	AzureBackendData *az = (AzureBackendData *)backend_data;
+	cloud_check_reinit_curl(&az->curl);
 	if (!az->curl) return -1;
 
 	struct curl_slist *headers = NULL;
@@ -280,6 +281,7 @@ static long long azure_read_range(void *backend_data, const char *url,
 static long long azure_get_size(void *backend_data, const char *url)
 {
 	AzureBackendData *az = (AzureBackendData *)backend_data;
+	cloud_check_reinit_curl(&az->curl);
 	if (!az->curl) return -1;
 
 	struct curl_slist *headers = NULL;

@@ -107,6 +107,7 @@ static long long gcs_read_range(void *backend_data, const char *url,
 	long long offset, long long length, unsigned char *buffer)
 {
 	GCSBackendData *gcs = (GCSBackendData *)backend_data;
+	cloud_check_reinit_curl(&gcs->curl);
 	if (!gcs->curl) return -1;
 
 	struct curl_slist *headers = NULL;
@@ -169,6 +170,7 @@ static long long gcs_read_range(void *backend_data, const char *url,
 static long long gcs_get_size(void *backend_data, const char *url)
 {
 	GCSBackendData *gcs = (GCSBackendData *)backend_data;
+	cloud_check_reinit_curl(&gcs->curl);
 	if (!gcs->curl) return -1;
 
 	struct curl_slist *headers = NULL;

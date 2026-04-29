@@ -16,6 +16,11 @@
 #include <string.h>
 #include <curl/curl.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -89,6 +94,9 @@ typedef struct CloudStream {
 	CloudBackend backend;            // backend function pointers
 	void *backend_data;              // backend-specific state
 	char last_error[CLOUD_MAX_ERROR_LEN];  // last error message
+#ifndef _WIN32
+	pid_t creator_pid;               // pid at creation time (fork detection)
+#endif
 } CloudStream;
 
 
@@ -143,6 +151,18 @@ void cache_clear_all(BlockCache *bc);
 void gdscloud_set_max_cache_size(long long size);
 /// Get the current default max cache size
 long long gdscloud_get_max_cache_size(void);
+
+
+// =====================================================================
+// Fork safety (Unix only)
+// =====================================================================
+
+/// Initialize fork tracking (call once after curl_global_init)
+void cloud_init_fork_tracking(void);
+
+/// Check if we are in a forked child; if so, reinitialize the CURL handle.
+/// Returns 1 if reinitialized, 0 if no action taken.
+int cloud_check_reinit_curl(CURL **curl_ptr);
 
 
 #ifdef __cplusplus

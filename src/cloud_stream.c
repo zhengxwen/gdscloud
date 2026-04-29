@@ -16,6 +16,44 @@
 
 
 // =====================================================================
+// Fork safety (Unix only)
+// =====================================================================
+
+#ifndef _WIN32
+static pid_t g_curl_init_pid = 0;
+#endif
+
+void cloud_init_fork_tracking(void)
+{
+#ifndef _WIN32
+	g_curl_init_pid = getpid();
+#endif
+}
+
+int cloud_check_reinit_curl(CURL **curl_ptr)
+{
+#ifndef _WIN32
+	pid_t cur_pid = getpid();
+	if (g_curl_init_pid != 0 && cur_pid != g_curl_init_pid)
+	{
+		// We are in a forked child process.
+		// Re-initialize libcurl global state (safe to call again per docs).
+		curl_global_init(CURL_GLOBAL_ALL);
+		// Destroy the inherited (unsafe) handle and create a fresh one.
+		if (curl_ptr && *curl_ptr)
+		{
+			curl_easy_cleanup(*curl_ptr);
+			*curl_ptr = curl_easy_init();
+		}
+		g_curl_init_pid = cur_pid;
+		return 1;
+	}
+#endif
+	return 0;
+}
+
+
+// =====================================================================
 // Global default cache size
 // =====================================================================
 
@@ -223,6 +261,10 @@ CloudStream *cloud_stream_create(const char *url,
 	cs->backend = *backend;
 	cs->backend_data = backend_data;
 
+#ifndef _WIN32
+	cs->creator_pid = getpid();
+#endif
+
 	// initialize cache
 	if (block_size <= 0) block_size = CLOUD_BLOCK_SIZE;
 	if (max_cache_size <= 0) max_cache_size = g_max_cache_size;
@@ -234,6 +276,17 @@ CloudStream *cloud_stream_create(const char *url,
 long long cloud_stream_read(CloudStream *cs, void *buffer, long long count)
 {
 	if (!cs || count <= 0) return 0;
+
+#ifndef _WIN32
+	// Fork detection: if we are in a child process, clear stale cache
+	// and force re-query of file size through the fresh CURL handle.
+	if (cs->creator_pid != 0 && getpid() != cs->creator_pid)
+	{
+		cache_clear_all(&cs->cache);
+		cs->file_size = -1;
+		cs->creator_pid = getpid();
+	}
+#endif
 
 	// ensure file size is known
 	if (cs->file_size < 0)
