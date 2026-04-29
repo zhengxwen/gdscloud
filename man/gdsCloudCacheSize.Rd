@@ -1,7 +1,7 @@
 \name{gdsCloudCacheSize}
 \alias{gdsCloudCacheSize}
 \alias{gdsCloudCacheClear}
-\alias{gdsCloudInfo}
+\alias{gdsCloudCacheInfo}
 \title{Cache Control for Cloud GDS Access}
 \description{
     Manage the block cache used for cloud storage access.
@@ -9,10 +9,11 @@
 \usage{
 gdsCloudCacheSize(size_mb=64)
 gdsCloudCacheClear()
-gdsCloudInfo()
+gdsCloudCacheInfo(verbose=TRUE)
 }
 \arguments{
     \item{size_mb}{default cache size in megabytes for new cloud streams}
+    \item{verbose}{if \code{TRUE}, print cache statistics to the console}
 }
 \details{
     Cloud GDS access uses an LRU block cache (1 MB blocks) to minimize
@@ -23,12 +24,12 @@ gdsCloudInfo()
 
     \code{gdsCloudCacheClear} frees cached data.
 
-    \code{gdsCloudInfo} prints cache statistics.
+    \code{gdsCloudCacheInfo} prints cache statistics.
 }
 \value{
     \code{gdsCloudCacheSize}: the new cache size (invisible).
     \code{gdsCloudCacheClear}: none (invisible).
-    \code{gdsCloudInfo}: a list with cache statistics (invisible).
+    \code{gdsCloudCacheInfo}: a list with cache statistics (invisible).
 }
 \seealso{
     \code{\link{gdsCloudOpen}}
@@ -39,7 +40,7 @@ gdsCloudInfo()
 gdsCloudCacheSize(128)
 
 # Show cache info
-gdsCloudInfo()
+gdsCloudCacheInfo()
 }
 }
 \keyword{GDS}

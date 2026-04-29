@@ -14,5 +14,5 @@ export(
     gdsCloudConfigAzure,
     gdsCloudCacheSize,
     gdsCloudCacheClear,
-    gdsCloudInfo
+    gdsCloudCacheInfo
 )

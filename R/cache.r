@@ -42,16 +42,20 @@ gdsCloudCacheClear <- function()
 #############################################################
 # Show cache information and statistics
 #
-gdsCloudInfo <- function()
+gdsCloudCacheInfo <- function(verbose=TRUE)
 {
     info <- .Call(gdscloud_cache_info)
-    cat("gdscloud cache settings:\n")
-    cat("  Default cache size:", .gdscloud_env$cache_size_mb, "MB\n")
-    cat("  Block size: 1 MB\n")
-    if (!is.null(info))
+    if (isTRUE(verbose))
     {
-        cat("  Global cache hits:", info$hits, "\n")
-        cat("  Global cache misses:", info$misses, "\n")
+        cat("gdscloud cache settings:\n")
+        cat("  Default cache size:", .gdscloud_env$cache_size_mb, "MB\n")
+        cat("  Block size: 1 MB\n")
+        if (!is.null(info))
+        {
+            cat("  Open cloud streams:", info$num_streams, "\n")
+            cat("  Global cache hits:", info$hits, "\n")
+            cat("  Global cache misses:", info$misses, "\n")
+        }
     }
     invisible(info)
 }

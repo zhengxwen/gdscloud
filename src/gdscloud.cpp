@@ -17,6 +17,13 @@
 #include <Rinternals.h>
 #include <R_ext/Rdynload.h>
 
+#include <vector>
+#include <algorithm>
+
+
+// Global registry of active CloudStream pointers
+static std::vector<CloudStream*> g_open_streams;
+
 
 // External declarations from C backend files
 extern "C" {
@@ -106,6 +113,9 @@ static long long gdscloud_cb_getsize(void *user_data)
 static void gdscloud_cb_close(void *user_data)
 {
 	CloudStream *cs = (CloudStream *)user_data;
+	g_open_streams.erase(
+		std::remove(g_open_streams.begin(), g_open_streams.end(), cs),
+		g_open_streams.end());
 	cloud_stream_close(cs);
 }
 
@@ -193,6 +203,7 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
 		}
 
+		g_open_streams.push_back(cs);
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
 
 	COREARRAY_CATCH
@@ -258,6 +269,7 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
 		}
 
+		g_open_streams.push_back(cs);
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
 
 	COREARRAY_CATCH
@@ -328,6 +340,7 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
 		}
 
+		g_open_streams.push_back(cs);
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
 
 	COREARRAY_CATCH
@@ -341,8 +354,8 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 
 extern "C" SEXP gdscloud_cache_clear(void)
 {
-	// Individual stream caches are managed per-stream.
-	// This function could maintain a global registry in the future.
+	for (size_t i = 0; i < g_open_streams.size(); i++)
+		cache_clear_all(&g_open_streams[i]->cache);
 	return R_NilValue;
 }
 
@@ -353,16 +366,23 @@ extern "C" SEXP gdscloud_cache_clear(void)
 
 extern "C" SEXP gdscloud_cache_info(void)
 {
-	// Return a basic list with global cache size setting
-	SEXP ans = PROTECT(Rf_allocVector(VECSXP, 2));
-	SEXP names = PROTECT(Rf_allocVector(STRSXP, 2));
-	SET_STRING_ELT(names, 0, Rf_mkChar("hits"));
-	SET_STRING_ELT(names, 1, Rf_mkChar("misses"));
+	long long total_hits = 0, total_misses = 0;
+	for (size_t i = 0; i < g_open_streams.size(); i++)
+	{
+		total_hits   += g_open_streams[i]->cache.total_hits;
+		total_misses += g_open_streams[i]->cache.total_misses;
+	}
+
+	SEXP ans = PROTECT(Rf_allocVector(VECSXP, 3));
+	SEXP names = PROTECT(Rf_allocVector(STRSXP, 3));
+	SET_STRING_ELT(names, 0, Rf_mkChar("num_streams"));
+	SET_STRING_ELT(names, 1, Rf_mkChar("hits"));
+	SET_STRING_ELT(names, 2, Rf_mkChar("misses"));
 	Rf_setAttrib(ans, R_NamesSymbol, names);
 
-	// Placeholder - would need a global registry to aggregate
-	SET_VECTOR_ELT(ans, 0, Rf_ScalarInteger(0));
-	SET_VECTOR_ELT(ans, 1, Rf_ScalarInteger(0));
+	SET_VECTOR_ELT(ans, 0, Rf_ScalarInteger((int)g_open_streams.size()));
+	SET_VECTOR_ELT(ans, 1, Rf_ScalarReal((double)total_hits));
+	SET_VECTOR_ELT(ans, 2, Rf_ScalarReal((double)total_misses));
 
 	UNPROTECT(2);
 	return ans;

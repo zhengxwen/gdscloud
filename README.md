@@ -83,7 +83,7 @@ gdsCloudCacheSize(128)
 gdsCloudCacheClear()
 
 # Show cache statistics
-gdsCloudInfo()
+gdsCloudCacheInfo()
 ```
 
 ## System Requirements
