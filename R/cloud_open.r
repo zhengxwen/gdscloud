@@ -48,9 +48,11 @@ gdsCloudOpen <- function(url, allow.error=FALSE)
 #
 gdsCloudSchemes <- function()
 {
-    c(s3  = "Amazon S3",
-      gs  = "Google Cloud Storage",
-      az  = "Azure Blob Storage")
+    c(
+        s3  = "Amazon S3",
+        gs  = "Google Cloud Storage",
+        az  = "Azure Blob Storage"
+    )
 }
 
 
