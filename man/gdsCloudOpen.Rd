@@ -23,7 +23,7 @@ gdsCloudOpen(url, allow.error=FALSE)
 \details{
     The function automatically detects the URL scheme and uses the
     appropriate cloud backend. Authentication credentials are read from
-    environment variables or from values set via \code{\link{gds.cloud.config.s3}}.
+    environment variables or from values set via \code{\link{gdsCloudConfigS3}}.
 
     All cloud access is read-only. The file data is cached in memory using
     an LRU block cache (default 64 MB) for efficient random access.
