@@ -387,3 +387,59 @@ extern "C" SEXP gdscloud_cache_info(void)
 	UNPROTECT(2);
 	return ans;
 }
+
+
+// =====================================================================
+// .Call: List open cloud streams with per-stream details
+// =====================================================================
+
+extern "C" SEXP gdscloud_list_streams(void)
+{
+	int n = (int)g_open_streams.size();
+
+	// create a data.frame-like list with 5 columns
+	SEXP ans = PROTECT(Rf_allocVector(VECSXP, 5));
+	SEXP col_url      = PROTECT(Rf_allocVector(STRSXP, n));
+	SEXP col_filesize  = PROTECT(Rf_allocVector(REALSXP, n));
+	SEXP col_cacheblk  = PROTECT(Rf_allocVector(INTSXP, n));
+	SEXP col_hits      = PROTECT(Rf_allocVector(REALSXP, n));
+	SEXP col_misses    = PROTECT(Rf_allocVector(REALSXP, n));
+
+	for (int i = 0; i < n; i++)
+	{
+		CloudStream *cs = g_open_streams[i];
+		SET_STRING_ELT(col_url, i, Rf_mkChar(cs->url));
+		REAL(col_filesize)[i] = (double)cs->file_size;
+		INTEGER(col_cacheblk)[i] = cs->cache.num_blocks;
+		REAL(col_hits)[i] = (double)cs->cache.total_hits;
+		REAL(col_misses)[i] = (double)cs->cache.total_misses;
+	}
+
+	SET_VECTOR_ELT(ans, 0, col_url);
+	SET_VECTOR_ELT(ans, 1, col_filesize);
+	SET_VECTOR_ELT(ans, 2, col_cacheblk);
+	SET_VECTOR_ELT(ans, 3, col_hits);
+	SET_VECTOR_ELT(ans, 4, col_misses);
+
+	// set column names
+	SEXP names = PROTECT(Rf_allocVector(STRSXP, 5));
+	SET_STRING_ELT(names, 0, Rf_mkChar("url"));
+	SET_STRING_ELT(names, 1, Rf_mkChar("file_size"));
+	SET_STRING_ELT(names, 2, Rf_mkChar("cache_blocks"));
+	SET_STRING_ELT(names, 3, Rf_mkChar("cache_hits"));
+	SET_STRING_ELT(names, 4, Rf_mkChar("cache_misses"));
+	Rf_setAttrib(ans, R_NamesSymbol, names);
+
+	// set class to data.frame
+	SEXP cls = PROTECT(Rf_mkString("data.frame"));
+	Rf_setAttrib(ans, R_ClassSymbol, cls);
+
+	// set row.names (1:n)
+	SEXP rownames = PROTECT(Rf_allocVector(INTSXP, 2));
+	INTEGER(rownames)[0] = NA_INTEGER;
+	INTEGER(rownames)[1] = -n;
+	Rf_setAttrib(ans, R_RowNamesSymbol, rownames);
+
+	UNPROTECT(9);
+	return ans;
+}

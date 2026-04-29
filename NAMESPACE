@@ -1,7 +1,7 @@
 # Dynamically load the compiled C/C++ shared library
 useDynLib(gdscloud,
     gdscloud_open_s3, gdscloud_open_gcs, gdscloud_open_azure,
-    gdscloud_cache_clear, gdscloud_cache_info)
+    gdscloud_cache_clear, gdscloud_cache_info, gdscloud_list_streams)
 
 # Import gdsfmt so its DLL are loaded first
 import(gdsfmt)
@@ -14,5 +14,6 @@ export(
     gdsCloudConfigAzure,
     gdsCloudCacheSize,
     gdsCloudCacheClear,
-    gdsCloudCacheInfo
+    gdsCloudCacheInfo,
+    gdsCloudList
 )

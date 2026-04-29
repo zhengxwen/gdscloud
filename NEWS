@@ -1,0 +1,23 @@
+CHANGES IN VERSION 0.1.0
+-------------------------
+
+NEW FEATURES
+
+    o Cloud storage access for GDS files via Amazon S3 (`s3://`), Google
+      Cloud Storage (`gs://`), and Azure Blob Storage (`az://`)
+
+    o Transparent integration with `openfn.gds()` from the gdsfmt package,
+      loading gdscloud enables cloud URL support automatically
+
+    o LRU block cache (1 MB blocks, default 64 MB) for efficient random
+      access with minimal HTTP requests
+
+    o Credential configuration functions: `gdsCloudConfigS3()`,
+      `gdsCloudConfigGCS()`, `gdsCloudConfigAzure()`, with fallback to
+      environment variables
+
+    o Cache control: `gdsCloudCacheSize()`, `gdsCloudCacheClear()`,
+      `gdsCloudCacheInfo()`
+
+    o `gdsCloudList()` to list all open cloud streams with per-stream
+      cache statistics

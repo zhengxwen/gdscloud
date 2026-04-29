@@ -23,6 +23,7 @@ extern SEXP gdscloud_open_gcs(SEXP, SEXP, SEXP);
 extern SEXP gdscloud_open_azure(SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP gdscloud_cache_clear(void);
 extern SEXP gdscloud_cache_info(void);
+extern SEXP gdscloud_list_streams(void);
 
 
 // .Call method table
@@ -32,6 +33,7 @@ static const R_CallMethodDef CallEntries[] = {
 	{ "gdscloud_open_azure",  (DL_FUNC) &gdscloud_open_azure,  5 },
 	{ "gdscloud_cache_clear", (DL_FUNC) &gdscloud_cache_clear,  0 },
 	{ "gdscloud_cache_info",  (DL_FUNC) &gdscloud_cache_info,   0 },
+	{ "gdscloud_list_streams",(DL_FUNC) &gdscloud_list_streams, 0 },
 	{ NULL, NULL, 0 }
 };
 

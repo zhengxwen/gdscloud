@@ -59,3 +59,12 @@ gdsCloudCacheInfo <- function(verbose=TRUE)
     }
     invisible(info)
 }
+
+
+#############################################################
+# List all open cloud streams
+#
+gdsCloudList <- function()
+{
+    .Call(gdscloud_list_streams)
+}
