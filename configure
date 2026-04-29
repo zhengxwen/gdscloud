@@ -1,6 +1,34 @@
 #!/bin/sh
 
-# Find OpenSSL installation
+# ---- Find libcurl ----
+CURL_CPPFLAGS=""
+CURL_LIBS=""
+
+# On macOS, prefer system curl-config to avoid rpath issues with Homebrew
+if [ "$(uname)" = "Darwin" ] && [ -x /usr/bin/curl-config ]; then
+    CURL_CPPFLAGS=$(/usr/bin/curl-config --cflags 2>/dev/null)
+    CURL_LIBS=$(/usr/bin/curl-config --libs 2>/dev/null)
+elif command -v curl-config >/dev/null 2>&1; then
+    CURL_CPPFLAGS=$(curl-config --cflags 2>/dev/null)
+    CURL_LIBS=$(curl-config --libs 2>/dev/null)
+    # On macOS with non-system curl, add rpath so dylib is found at runtime
+    if [ "$(uname)" = "Darwin" ]; then
+        CURL_LIBDIR=$(curl-config --prefix 2>/dev/null)/lib
+        if [ -d "$CURL_LIBDIR" ]; then
+            CURL_LIBS="${CURL_LIBS} -Wl,-rpath,${CURL_LIBDIR}"
+        fi
+    fi
+fi
+
+if [ -z "$CURL_LIBS" ]; then
+    echo "ERROR: libcurl not found."
+    echo "  Debian/Ubuntu: sudo apt-get install libcurl4-openssl-dev"
+    echo "  Fedora/RHEL:   sudo dnf install libcurl-devel"
+    echo "  macOS:         brew install curl"
+    exit 1
+fi
+
+# ---- Find OpenSSL ----
 OPENSSL_CPPFLAGS=""
 OPENSSL_LIBS="-lssl -lcrypto"
 
@@ -20,8 +48,10 @@ if [ -n "$OPENSSL_PREFIX" ]; then
     OPENSSL_LIBS="-L${OPENSSL_PREFIX}/lib -lssl -lcrypto"
 fi
 
-# Generate src/Makevars from src/Makevars.in
-sed -e "s|@OPENSSL_CPPFLAGS@|${OPENSSL_CPPFLAGS}|" \
+# ---- Generate src/Makevars ----
+sed -e "s|@CURL_CPPFLAGS@|${CURL_CPPFLAGS}|" \
+    -e "s|@CURL_LIBS@|${CURL_LIBS}|" \
+    -e "s|@OPENSSL_CPPFLAGS@|${OPENSSL_CPPFLAGS}|" \
     -e "s|@OPENSSL_LIBS@|${OPENSSL_LIBS}|" \
     src/Makevars.in > src/Makevars
 
