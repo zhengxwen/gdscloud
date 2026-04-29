@@ -1,4 +1,0 @@
-OPENSSL_PREFIX = $(shell brew --prefix openssl 2>/dev/null || echo /usr/local/opt/openssl)
-
-PKG_CPPFLAGS = -I$(OPENSSL_PREFIX)/include
-PKG_LIBS += -lcurl -L$(OPENSSL_PREFIX)/lib -lssl -lcrypto

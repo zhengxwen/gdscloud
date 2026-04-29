@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# Find OpenSSL installation
+OPENSSL_CPPFLAGS=""
+OPENSSL_LIBS="-lssl -lcrypto"
+
+# Check user-supplied OPENSSL_PREFIX
+if [ -z "$OPENSSL_PREFIX" ]; then
+    # Try Homebrew (macOS)
+    OPENSSL_PREFIX=$(brew --prefix openssl 2>/dev/null)
+fi
+
+if [ -z "$OPENSSL_PREFIX" ]; then
+    # Try pkg-config
+    OPENSSL_PREFIX=$(pkg-config --variable=prefix openssl 2>/dev/null)
+fi
+
+if [ -n "$OPENSSL_PREFIX" ]; then
+    OPENSSL_CPPFLAGS="-I${OPENSSL_PREFIX}/include"
+    OPENSSL_LIBS="-L${OPENSSL_PREFIX}/lib -lssl -lcrypto"
+fi
+
+# Generate src/Makevars from src/Makevars.in
+sed -e "s|@OPENSSL_CPPFLAGS@|${OPENSSL_CPPFLAGS}|" \
+    -e "s|@OPENSSL_LIBS@|${OPENSSL_LIBS}|" \
+    src/Makevars.in > src/Makevars
+
+exit 0
