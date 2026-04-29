@@ -19,6 +19,15 @@
 
 
 #############################################################
+# Internal: null-coalescing operator
+#
+`%||%` <- function(x, y)
+{
+    if (is.null(x)) y else x
+}
+
+
+#############################################################
 # Configure AWS S3 credentials
 #
 gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
@@ -106,13 +115,4 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
         sas_token = .gdscloud_env$azure_sas_token %||%
             Sys.getenv("AZURE_STORAGE_SAS_TOKEN", "")
     )
-}
-
-
-#############################################################
-# Internal: null-coalescing operator
-#
-`%||%` <- function(x, y)
-{
-    if (is.null(x)) y else x
 }
