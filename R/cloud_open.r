@@ -43,6 +43,17 @@ gdsCloudOpen <- function(url, allow.error=FALSE)
 }
 
 
+#############################################################
+# List supported cloud URL schemes
+#
+gdsCloudSchemes <- function()
+{
+    c(s3  = "Amazon S3",
+      gs  = "Google Cloud Storage",
+      az  = "Azure Blob Storage")
+}
+
+
 .add_pkgname <- function(ans)
 {
     if (is.list(ans) && !is.null(ans$filename))

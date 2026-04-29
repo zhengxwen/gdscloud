@@ -15,5 +15,6 @@ export(
     gdsCloudCacheSize,
     gdsCloudCacheClear,
     gdsCloudCacheInfo,
-    gdsCloudList
+    gdsCloudList,
+    gdsCloudSchemes
 )
