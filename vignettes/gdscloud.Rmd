@@ -196,6 +196,9 @@ gdsCloudCacheClear()
 
 # Display cache statistics
 gdsCloudInfo()
+
+# List all open cloud streams
+gdsCloudList()
 ```
 
 Increasing cache size is beneficial when working with large files that require many random seeks (e.g., subsetting genotype matrices by sample and variant).
