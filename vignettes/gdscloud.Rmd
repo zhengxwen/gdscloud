@@ -1,0 +1,274 @@
+---
+title: "Cloud Storage Access for GDS Files"
+author: "Xiuwen Zheng"
+date: "2026-05-01"
+output:
+    BiocStyle::html_document:
+        toc: true
+        toc_depth: 3
+vignette: >
+    %\VignetteIndexEntry{Cloud Storage Access for GDS Files}
+    %\VignetteEngine{knitr::rmarkdown}
+    %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=FALSE)
+```
+
+
+# Introduction
+
+GDS (Genomic Data Structure) is a high-performance file format for storing and accessing large-scale genomic data, implemented by the [gdsfmt](https://bioconductor.org/packages/gdsfmt) package. It supports hierarchical data organization with efficient random access and data compression.
+
+The **gdscloud** package extends gdsfmt to provide transparent read-only access to GDS files stored on cloud storage services. It uses HTTP Range requests via libcurl with an efficient LRU block cache to minimize network overhead.
+
+Supported cloud storage backends:
+
+- **Amazon S3** — URLs of the form `s3://bucket/key`
+- **Google Cloud Storage** — URLs of the form `gs://bucket/key`
+- **Azure Blob Storage** — URLs of the form `az://container/blob`
+
+
+# Installation
+
+```{r install}
+if (!requireNamespace("BiocManager", quietly=TRUE))
+    install.packages("BiocManager")
+BiocManager::install("gdscloud")
+```
+
+
+# Quick Start
+
+Once gdscloud is loaded, `openfn.gds()` from the gdsfmt package automatically recognizes cloud URLs and opens them transparently:
+
+```{r quickstart}
+library(gdscloud)
+
+# Open a GDS file from S3 — transparent via openfn.gds()
+gds <- openfn.gds("s3://gds-stat/download/hapmap/hapmap_r23a.gds")
+gds
+## File: s3://gds-stat/download/hapmap/hapmap_r23a.gds (86.5M)
+## +    [  ] *
+## |--+ description   [  ] *
+## |--+ sample.id   { Str8 270 LZMA_ra(17.3%), 381B } *
+## |--+ variant.id   { Int32 4098136 LZMA_ra(3.19%), 511.4K } *
+## |--+ position   { Int32 4098136 LZMA_ra(48.2%), 7.5M } *
+## |--+ chromosome   { Str8 4098136 LZMA_ra(0.02%), 1.7K } *
+## |--+ allele   { Str8 4098136 LZMA_ra(12.8%), 2.0M } *
+## |--+ genotype   [  ] *
+## |  |--+ data   { Bit2 2x270x4098136 LZMA_ra(12.4%), 65.4M } *
+## |  |--+ extra.index   { Int32 3x0 LZMA_ra, 18B } *
+## |  \--+ extra   { Int16 0 LZMA_ra, 18B }
+## |--+ phase   [  ]
+## |  |--+ data   { Bit1 270x4098136 LZMA_ra(0.01%), 19.8K } *
+## |  |--+ extra.index   { Int32 3x0 LZMA_ra, 18B } *
+## |  \--+ extra   { Bit1 0 LZMA_ra, 18B }
+## |--+ annotation   [  ]
+## |  |--+ id   { Str8 4098136 LZMA_ra(27.7%), 11.1M } *
+## |  |--+ qual   { Float32 4098136 LZMA_ra(0.02%), 2.5K } *
+## |  |--+ filter   { Int32,factor 4098136 LZMA_ra(0.02%), 2.5K } *
+## |  |--+ info   [  ]
+## |  \--+ format   [  ]
+## \--+ sample.annotation   [  ]
+##    |--+ family   { Str8 270 LZMA_ra(17.3%), 381B } *
+##    |--+ father   { Str8 270 LZMA_ra(28.2%), 261B } *
+##    |--+ mother   { Str8 270 LZMA_ra(28.2%), 261B } *
+##    |--+ sex   { Str8 270 LZMA_ra(27.0%), 153B } *
+##    \--+ phenotype   { Int32 270 LZMA_ra(8.70%), 101B } *
+
+read.gdsn(index.gdsn(gds, "chromosome"))
+## "1", ...
+
+read.gdsn(index.gdsn(gds, "position"))
+## 45162 45257 45413 46844 72434 72515 ...
+
+closefn.gds(gds)
+```
+
+Alternatively, use the explicit function:
+
+```{r explicit}
+gds <- gdsCloudOpen("s3://my-bucket/data/example.gds")
+closefn.gds(gds)
+```
+
+
+# Authentication
+
+Each cloud backend requires credentials. Credentials can be set either via environment variables (recommended for non-interactive use) or via R functions (convenient for interactive sessions). R-configured credentials take priority over environment variables.
+
+## Amazon S3
+
+**Environment variables:**
+
+```bash
+export AWS_ACCESS_KEY_ID=your_key
+export AWS_SECRET_ACCESS_KEY=your_secret
+export AWS_DEFAULT_REGION=us-east-1
+# Optional for temporary credentials:
+export AWS_SESSION_TOKEN=your_token
+```
+
+**R configuration:**
+
+```{r auth-s3}
+gdsCloudConfigS3(
+    aws_access_key_id = "your_key",
+    aws_secret_access_key = "your_secret",
+    region = "us-east-1"
+)
+```
+
+Then open:
+
+```{r open-s3}
+gds <- gdsCloudOpen("s3://my-bucket/path/to/file.gds")
+# ... work with the file ...
+closefn.gds(gds)
+```
+
+## Google Cloud Storage
+
+**Environment variable:**
+
+```bash
+export GCS_ACCESS_TOKEN=your_oauth2_token
+```
+
+**R configuration:**
+
+```{r auth-gcs}
+gdsCloudConfigGCS(access_token = "your_oauth2_token")
+```
+
+Then open:
+
+```{r open-gcs}
+gds <- gdsCloudOpen("gs://my-bucket/path/to/file.gds")
+closefn.gds(gds)
+```
+
+## Azure Blob Storage
+
+**Environment variables:**
+
+```bash
+export AZURE_STORAGE_ACCOUNT=your_account
+export AZURE_STORAGE_KEY=your_key
+# Or use a SAS token instead:
+export AZURE_STORAGE_SAS_TOKEN=your_sas_token
+```
+
+**R configuration:**
+
+```{r auth-azure}
+gdsCloudConfigAzure(
+    account_name = "mystorageaccount",
+    account_key = "base64encodedkey=="
+)
+# Or with SAS token:
+gdsCloudConfigAzure(
+    account_name = "mystorageaccount",
+    sas_token = "sv=2021-06-08&ss=b&srt=co&sp=r..."
+)
+```
+
+Then open:
+
+```{r open-azure}
+gds <- gdsCloudOpen("az://my-container/path/to/file.gds")
+closefn.gds(gds)
+```
+
+
+# Cache Control
+
+Cloud access uses an LRU block cache (1 MB blocks) to minimize HTTP requests. The default cache size is 64 MB per stream.
+
+```{r cache}
+# Set the default cache size for new streams (in MB)
+gdsCloudCacheSize(128)
+
+# Clear all cached data
+gdsCloudCacheClear()
+
+# Display cache statistics
+gdsCloudInfo()
+```
+
+Increasing cache size is beneficial when working with large files that require many random seeks (e.g., subsetting genotype matrices by sample and variant).
+
+
+# Integration with SeqArray
+
+Since gdscloud works transparently through `openfn.gds()`, packages built on gdsfmt, such as [SeqArray](https://bioconductor.org/packages/SeqArray), can open cloud-hosted files directly.
+
+**Note:** SeqArray >= v1.53.1 is recommended for full cloud support. This version allows `seqParallel()` to automatically load cloud-related packages on worker processes, so parallel operations on cloud-hosted GDS files work seamlessly.
+
+```{r seqarray}
+library(SeqArray)
+library(gdscloud)
+
+# Open a SeqArray GDS file from S3
+gds <- seqOpen("s3://gds-stat/download/1000g/2022/1kGP_high_coverage_Illumina.allchr.filtered.SNV_INDEL_SV_phased_panel.gds")
+gds
+## File: s3://gds-stat/download/1000g/2022/1kGP_high_coverage_Illumina.allchr.filtered.SNV_INDEL_SV_phased_panel.gds (2.4G)
+## +    [  ] *
+## |--+ description   [  ] *
+## |--+ sample.id   { Str8 3202 LZMA_ra(6.61%), 1.7K } *
+## |--+ variant.id   { Int32 73554796 LZMA_ra(2.36%), 6.6M } *
+## |--+ position   { Int32 73554796 LZMA_ra(27.9%), 78.4M } *
+## |--+ chromosome   { Str8 73554796 LZMA_ra(0.01%), 25.3K } *
+## |--+ allele   { Str8 73554796 LZMA_ra(15.8%), 51.4M } *
+## |--+ genotype   [  ] *
+## |  |--+ data   { Bit2 2x3202x73554796 LZMA_ra(1.77%), 1.9G } *
+## |  |--+ extra.index   { Int32 3x0 LZMA_ra, 18B } *
+## |  \--+ extra   { Int16 0 LZMA_ra, 18B }
+## |--+ phase   [  ]
+## |  |--+ data   { Bit1 3202x73554796 LZMA_ra(0.01%), 4.1M } *
+## |  |--+ extra.index   { Int32 3x0 LZMA_ra, 18B } *
+## |  \--+ extra   { Bit1 0 LZMA_ra, 18B }
+## |--+ annotation   [  ]
+## |  |--+ id   { Str8 73554796 LZMA_ra(17.2%), 186.3M } *
+## |  |--+ qual   { Float32 73554796 LZMA_ra(0.01%), 42.0K } *
+## |  |--+ filter   { Int32,factor 73554796 LZMA_ra(0.01%), 42.0K } *
+## |  |--+ info   [  ]
+## |  |  |--+ AF   { Float32 73554796 LZMA_ra(23.6%), 66.3M } *
+## |  |  |--+ AC   { Int32 73554796 LZMA_ra(22.3%), 62.5M } *
+## |  |  |--+ CM   { Float32 73554796 LZMA_ra(6.08%), 17.1M } *
+## |  |  |--+ AN   { Int32 73554796 LZMA_ra(0.01%), 42.0K } *
+## |  |  \--+ SVTYPE   { Str8 73554796 LZMA_ra(0.33%), 240.0K } *
+## |  \--+ format   [  ]
+## \--+ sample.annotation   [  ]
+
+seqSummary(gds)
+## File: s3://gds-stat/download/1000g/2022/1kGP_high_coverage_Illumina.allchr.filtered.SNV_INDEL_SV_phased_panel.gds
+## Format Version: v1.0
+## Reference: unknown
+## Ploidy: 2
+## Number of samples: 3,202
+## Number of variants: 73,554,796
+## Chromosomes:
+##     chr1 : 5759060, chr2 : 6088598, chr3 : 4983185, chr4 : 4875465, chr5 : 4536819, chr6 : 4315217
+##     chr7 : 4137254, chr8 : 3886222, chr9 : 3165513, chr10: 3495473, chr11: 3423341, chr12: 3332788
+##     chr13: 2509179, chr14: 2290400, chr15: 2109285, chr16: 2362361, chr17: 2073624, chr18: 1963845
+##     chr19: 1670692, chr20: 1644384, chr21: 1002753, chr22: 1066557, chrX : 2862781
+## ...
+
+seqClose(gds)
+```
+
+No code changes are needed in downstream packages; loading gdscloud is sufficient to enable cloud URL support.
+
+
+# Session Information
+
+```{r pkg, eval=TRUE, echo=FALSE}
+library(gdscloud, quietly=TRUE)
+```
+
+```{r session, eval=TRUE}
+sessionInfo()
+```

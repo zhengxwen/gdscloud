@@ -12,6 +12,8 @@ Description: Provides read-only access to GDS (Genomic Data Structure) files
     caching and HTTP Range requests via libcurl.
 Depends: R (>= 3.5.0), gdsfmt (>= 1.49.1)
 LinkingTo: gdsfmt
+Suggests: BiocStyle, knitr, rmarkdown
+VignetteBuilder: knitr
 License: LGPL-3
 SystemRequirements: libcurl (>= 7.28.0)
 URL: https://github.com/zhengxwen/gdscloud

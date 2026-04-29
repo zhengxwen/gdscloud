@@ -1,7 +1,12 @@
 # gdscloud: Cloud Storage Access for GDS Files
 
-Provides read-only access to GDS (Genomic Data Structure) files stored on cloud
-storage services:
+GDS (Genomic Data Structure) is a high-performance file format for storing and
+accessing large-scale genomic data, implemented by the
+[gdsfmt](https://bioconductor.org/packages/gdsfmt) package. It supports
+hierarchical data organization with efficient random access and data compression.
+
+The `gdscloud` package extends `gdsfmt` to provide transparent read-only access
+to GDS files stored on cloud storage services:
 
 - **Amazon S3** (`s3://bucket/key`)
 - **Google Cloud Storage** (`gs://bucket/key`)
@@ -10,9 +15,20 @@ storage services:
 ## Installation
 
 ```r
-# Install from source
-install.packages("gdscloud", repos=NULL, type="source")
+# Install from Bioconductor
+if (!requireNamespace("BiocManager", quietly=TRUE))
+    install.packages("BiocManager")
+BiocManager::install("gdscloud")
 ```
+
+## System Requirements
+
+- libcurl >= 7.28.0
+- gdsfmt >= 1.49.1
+
+## Maintainer
+
+Xiuwen Zheng
 
 ## Usage
 
@@ -86,7 +102,7 @@ gdsCloudCacheClear()
 gdsCloudCacheInfo()
 ```
 
-## System Requirements
+## Also See
 
-- libcurl >= 7.28.0
-- gdsfmt >= 1.49.1
+- [gdsfmt](https://bioconductor.org/packages/gdsfmt): Foundation package for GDS file format I/O
+- [SeqArray](https://bioconductor.org/packages/SeqArray): Data management of whole-genome sequence variant calls using GDS files
