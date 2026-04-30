@@ -1,0 +1,8 @@
+bibentry(
+    bibtype = "Manual",
+    title = "gdscloud: Cloud Storage Access for GDS Files",
+    author = person("Xiuwen", "Zheng"),
+    year = "2026",
+    note = "R package version 0.99.0",
+    url = "https://github.com/zhengxwen/gdscloud"
+)
