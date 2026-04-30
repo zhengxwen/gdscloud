@@ -35,13 +35,11 @@ gdsCloudCacheInfo(verbose=TRUE)
     \code{\link{gdsCloudOpen}}
 }
 \examples{
-\dontrun{
 # Increase cache to 128 MB
 gdsCloudCacheSize(128)
 
 # Show cache info
 gdsCloudCacheInfo()
-}
 }
 \keyword{GDS}
 \keyword{cloud}

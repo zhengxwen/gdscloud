@@ -195,7 +195,7 @@ gdsCloudCacheSize(128)
 gdsCloudCacheClear()
 
 # Display cache statistics
-gdsCloudInfo()
+gdsCloudCacheInfo()
 
 # List all open cloud streams
 gdsCloudList()
