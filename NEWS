@@ -16,6 +16,10 @@ NEW FEATURES
       `gdsCloudConfigGCS()`, `gdsCloudConfigAzure()`, with fallback to
       environment variables
 
+    o `gdsCloudExportCredentials()` copies configured cloud credentials
+      to child processes of a parallel cluster, for use with
+      `SeqArray::seqParallel()`
+
     o Cache control: `gdsCloudCacheSize()`, `gdsCloudCacheClear()`,
       `gdsCloudCacheInfo()`
 

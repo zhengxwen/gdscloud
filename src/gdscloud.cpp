@@ -71,7 +71,7 @@ public:
 // =====================================================================
 
 /// Read callback: user_data is a CloudStream*
-static ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data)
+static ssize_t gdscloud_cb_read(void *user_data, void *buffer, ssize_t count)
 {
 	CloudStream *cs = (CloudStream *)user_data;
 	long long result = cloud_stream_read(cs, buffer, (long long)count);
@@ -87,7 +87,7 @@ static ssize_t gdscloud_cb_read(void *buffer, ssize_t count, void *user_data)
 }
 
 /// Seek callback: origin matches TdSysSeekOrg (0=begin, 1=current, 2=end)
-static long long gdscloud_cb_seek(long long offset, int origin, void *user_data)
+static long long gdscloud_cb_seek(void *user_data, long long offset, int origin)
 {
 	CloudStream *cs = (CloudStream *)user_data;
 	return cloud_stream_seek(cs, offset, origin);
@@ -188,13 +188,14 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 
 		// open via gdsfmt callback API
 		PdGDSFile file = GDS_File_Open_Callback(
+			cs,
 			(TdCbStreamRead)gdscloud_cb_read,
 			(TdCbStreamWrite)NULL,
 			(TdCbStreamSeek)gdscloud_cb_seek,
 			(TdCbStreamGetSize)gdscloud_cb_getsize,
 			(TdCbStreamSetSize)NULL,
 			(TdCbStreamClose)gdscloud_cb_close,
-			cs, TRUE, FALSE);
+			TRUE, FALSE);
 
 		if (!file)
 		{
@@ -254,13 +255,14 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 		}
 
 		PdGDSFile file = GDS_File_Open_Callback(
+			cs,
 			(TdCbStreamRead)gdscloud_cb_read,
 			(TdCbStreamWrite)NULL,
 			(TdCbStreamSeek)gdscloud_cb_seek,
 			(TdCbStreamGetSize)gdscloud_cb_getsize,
 			(TdCbStreamSetSize)NULL,
 			(TdCbStreamClose)gdscloud_cb_close,
-			cs, TRUE, FALSE);
+			TRUE, FALSE);
 
 		if (!file)
 		{
@@ -325,13 +327,14 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 		}
 
 		PdGDSFile file = GDS_File_Open_Callback(
+			cs,
 			(TdCbStreamRead)gdscloud_cb_read,
 			(TdCbStreamWrite)NULL,
 			(TdCbStreamSeek)gdscloud_cb_seek,
 			(TdCbStreamGetSize)gdscloud_cb_getsize,
 			(TdCbStreamSetSize)NULL,
 			(TdCbStreamClose)gdscloud_cb_close,
-			cs, TRUE, FALSE);
+			TRUE, FALSE);
 
 		if (!file)
 		{
