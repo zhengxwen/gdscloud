@@ -69,8 +69,8 @@ gdsCloudSchemes <- function()
 #
 .open_s3 <- function(url, allow.error=FALSE)
 {
-    # get credentials
-    cred <- .get_s3_credentials()
+    # get credentials (URL-specific entry takes priority)
+    cred <- .get_s3_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
     .add_pkgname(.Call(gdscloud_open_s3, url,
@@ -84,7 +84,7 @@ gdsCloudSchemes <- function()
 #
 .open_gcs <- function(url, allow.error=FALSE)
 {
-    cred <- .get_gcs_credentials()
+    cred <- .get_gcs_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
     .add_pkgname(.Call(gdscloud_open_gcs, url, cred$access_token,
@@ -97,7 +97,7 @@ gdsCloudSchemes <- function()
 #
 .open_azure <- function(url, allow.error=FALSE)
 {
-    cred <- .get_azure_credentials()
+    cred <- .get_azure_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
     .add_pkgname(.Call(gdscloud_open_azure, url,

@@ -1,0 +1,2 @@
+PKG_CPPFLAGS =  -I/opt/homebrew/opt/openssl@3/include
+PKG_LIBS = -lcurl -L/opt/homebrew/opt/openssl@3/lib -lssl -lcrypto

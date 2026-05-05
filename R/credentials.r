@@ -28,19 +28,120 @@
 
 
 #############################################################
+# Internal: first non-empty string wins (URL > global > env)
+#
+.first_nonempty <- function(...)
+{
+    vals <- list(...)
+    for (v in vals)
+    {
+        if (!is.null(v) && nzchar(v))
+            return(v)
+    }
+    ""
+}
+
+
+#############################################################
+# Internal: normalize a URL prefix and validate its scheme
+#
+.normalize_url_prefix <- function(url, expected_scheme)
+{
+    if (!is.character(url) || length(url) != 1L || is.na(url) ||
+        !nzchar(url))
+    {
+        stop("'url' must be a single non-empty character string.",
+            call.=FALSE)
+    }
+    scheme <- sub("://.*", "", url)
+    if (!identical(scheme, expected_scheme))
+    {
+        stop("URL scheme '", scheme, "://' does not match expected '",
+            expected_scheme, "://'.", call.=FALSE)
+    }
+    # strip a trailing wildcard, then ensure a trailing '/'
+    url <- sub("\\*+$", "", url)
+    if (!endsWith(url, "/"))
+        url <- paste0(url, "/")
+    url
+}
+
+
+#############################################################
+# Internal: store / remove a URL-specific credential entry
+#
+.set_url_credentials <- function(url, scheme, fields)
+{
+    key <- .normalize_url_prefix(url, scheme)
+    # drop NULL fields
+    fields <- fields[!vapply(fields, is.null, logical(1L))]
+    tbl <- .gdscloud_env$url_credentials %||% list()
+    if (length(fields) == 0L)
+    {
+        # remove the entry (no-op if it does not exist)
+        tbl[[key]] <- NULL
+    } else {
+        fields$scheme <- scheme
+        tbl[[key]] <- fields
+    }
+    .gdscloud_env$url_credentials <- tbl
+    invisible()
+}
+
+
+#############################################################
+# Internal: find the URL-specific entry with the longest matching
+# prefix for `url` within the given scheme. Returns NULL when none.
+#
+.match_url_credentials <- function(url, scheme)
+{
+    if (!is.character(url) || length(url) != 1L || is.na(url) ||
+        !nzchar(url))
+    {
+        return(NULL)
+    }
+    tbl <- .gdscloud_env$url_credentials
+    if (!length(tbl))
+        return(NULL)
+    keys <- names(tbl)
+    # restrict to entries of the requested scheme
+    schemes <- vapply(tbl, function(e) e$scheme %||% "", character(1L))
+    sel <- schemes == scheme & vapply(keys, startsWith, logical(1L),
+        x=url)
+    if (!any(sel))
+        return(NULL)
+    idx <- which(sel)
+    # longest-prefix wins
+    best <- idx[which.max(nchar(keys[idx]))]
+    tbl[[best]]
+}
+
+
+#############################################################
 # Configure AWS S3 credentials
 #
 gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
-    aws_secret_access_key=NULL, region=NULL, session_token=NULL)
+    aws_secret_access_key=NULL, region=NULL, session_token=NULL,
+    url=NULL)
 {
-    if (!is.null(aws_access_key_id))
-        .gdscloud_env$aws_access_key_id <- aws_access_key_id
-    if (!is.null(aws_secret_access_key))
-        .gdscloud_env$aws_secret_access_key <- aws_secret_access_key
-    if (!is.null(region))
-        .gdscloud_env$aws_region <- region
-    if (!is.null(session_token))
-        .gdscloud_env$aws_session_token <- session_token
+    if (is.null(url))
+    {
+        if (!is.null(aws_access_key_id))
+            .gdscloud_env$aws_access_key_id <- aws_access_key_id
+        if (!is.null(aws_secret_access_key))
+            .gdscloud_env$aws_secret_access_key <- aws_secret_access_key
+        if (!is.null(region))
+            .gdscloud_env$aws_region <- region
+        if (!is.null(session_token))
+            .gdscloud_env$aws_session_token <- session_token
+    } else {
+        .set_url_credentials(url, "s3", list(
+            aws_access_key_id     = aws_access_key_id,
+            aws_secret_access_key = aws_secret_access_key,
+            aws_region            = region,
+            aws_session_token     = session_token
+        ))
+    }
     invisible()
 }
 
@@ -48,10 +149,17 @@ gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
 #############################################################
 # Configure GCS credentials
 #
-gdsCloudConfigGCS <- function(access_token=NULL)
+gdsCloudConfigGCS <- function(access_token=NULL, url=NULL)
 {
-    if (!is.null(access_token))
-        .gdscloud_env$gcs_access_token <- access_token
+    if (is.null(url))
+    {
+        if (!is.null(access_token))
+            .gdscloud_env$gcs_access_token <- access_token
+    } else {
+        .set_url_credentials(url, "gs", list(
+            gcs_access_token = access_token
+        ))
+    }
     invisible()
 }
 
@@ -60,32 +168,52 @@ gdsCloudConfigGCS <- function(access_token=NULL)
 # Configure Azure credentials
 #
 gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
-    sas_token=NULL)
+    sas_token=NULL, url=NULL)
 {
-    if (!is.null(account_name))
-        .gdscloud_env$azure_account_name <- account_name
-    if (!is.null(account_key))
-        .gdscloud_env$azure_account_key <- account_key
-    if (!is.null(sas_token))
-        .gdscloud_env$azure_sas_token <- sas_token
+    if (is.null(url))
+    {
+        if (!is.null(account_name))
+            .gdscloud_env$azure_account_name <- account_name
+        if (!is.null(account_key))
+            .gdscloud_env$azure_account_key <- account_key
+        if (!is.null(sas_token))
+            .gdscloud_env$azure_sas_token <- sas_token
+    } else {
+        .set_url_credentials(url, "az", list(
+            azure_account_name = account_name,
+            azure_account_key  = account_key,
+            azure_sas_token    = sas_token
+        ))
+    }
     invisible()
 }
 
 
 #############################################################
-# Internal: get S3 credentials (R config > env vars)
+# Internal: get S3 credentials
+# Priority: URL-specific entry > global (.gdscloud_env) > env vars
 #
-.get_s3_credentials <- function()
+.get_s3_credentials <- function(url=NULL)
 {
+    m <- .match_url_credentials(url, "s3")
     list(
-        access_key = .gdscloud_env$aws_access_key_id %||%
-            Sys.getenv("AWS_ACCESS_KEY_ID", ""),
-        secret_key = .gdscloud_env$aws_secret_access_key %||%
-            Sys.getenv("AWS_SECRET_ACCESS_KEY", ""),
-        region = .gdscloud_env$aws_region %||%
-            Sys.getenv("AWS_DEFAULT_REGION", "us-east-1"),
-        session_token = .gdscloud_env$aws_session_token %||%
-            Sys.getenv("AWS_SESSION_TOKEN", "")
+        access_key = .first_nonempty(
+            m$aws_access_key_id,
+            .gdscloud_env$aws_access_key_id,
+            Sys.getenv("AWS_ACCESS_KEY_ID", "")),
+        secret_key = .first_nonempty(
+            m$aws_secret_access_key,
+            .gdscloud_env$aws_secret_access_key,
+            Sys.getenv("AWS_SECRET_ACCESS_KEY", "")),
+        region = .first_nonempty(
+            m$aws_region,
+            .gdscloud_env$aws_region,
+            Sys.getenv("AWS_DEFAULT_REGION", ""),
+            "us-east-1"),
+        session_token = .first_nonempty(
+            m$aws_session_token,
+            .gdscloud_env$aws_session_token,
+            Sys.getenv("AWS_SESSION_TOKEN", ""))
     )
 }
 
@@ -93,11 +221,14 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
 #############################################################
 # Internal: get GCS credentials
 #
-.get_gcs_credentials <- function()
+.get_gcs_credentials <- function(url=NULL)
 {
+    m <- .match_url_credentials(url, "gs")
     list(
-        access_token = .gdscloud_env$gcs_access_token %||%
-            Sys.getenv("GCS_ACCESS_TOKEN", "")
+        access_token = .first_nonempty(
+            m$gcs_access_token,
+            .gdscloud_env$gcs_access_token,
+            Sys.getenv("GCS_ACCESS_TOKEN", ""))
     )
 }
 
@@ -105,15 +236,22 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
 #############################################################
 # Internal: get Azure credentials
 #
-.get_azure_credentials <- function()
+.get_azure_credentials <- function(url=NULL)
 {
+    m <- .match_url_credentials(url, "az")
     list(
-        account_name = .gdscloud_env$azure_account_name %||%
-            Sys.getenv("AZURE_STORAGE_ACCOUNT", ""),
-        account_key = .gdscloud_env$azure_account_key %||%
-            Sys.getenv("AZURE_STORAGE_KEY", ""),
-        sas_token = .gdscloud_env$azure_sas_token %||%
-            Sys.getenv("AZURE_STORAGE_SAS_TOKEN", "")
+        account_name = .first_nonempty(
+            m$azure_account_name,
+            .gdscloud_env$azure_account_name,
+            Sys.getenv("AZURE_STORAGE_ACCOUNT", "")),
+        account_key = .first_nonempty(
+            m$azure_account_key,
+            .gdscloud_env$azure_account_key,
+            Sys.getenv("AZURE_STORAGE_KEY", "")),
+        sas_token = .first_nonempty(
+            m$azure_sas_token,
+            .gdscloud_env$azure_sas_token,
+            Sys.getenv("AZURE_STORAGE_SAS_TOKEN", ""))
     )
 }
 
@@ -135,7 +273,12 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
     ans <- lapply(nms, function(nm) .gdscloud_env[[nm]])
     names(ans) <- nms
     # drop unset entries
-    ans[!vapply(ans, is.null, logical(1L))]
+    ans <- ans[!vapply(ans, is.null, logical(1L))]
+    # include URL-specific registry if non-empty
+    url_tbl <- .gdscloud_env$url_credentials
+    if (length(url_tbl))
+        ans$url_credentials <- url_tbl
+    ans
 }
 
 

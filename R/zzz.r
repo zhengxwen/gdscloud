@@ -26,6 +26,9 @@
     # default settings
     .gdscloud_env$cache_size_mb <- 64L
 
+    # registry of URL-specific credential entries (longest-prefix match)
+    .gdscloud_env$url_credentials <- list()
+
     # register URL scheme handlers with gdsfmt
     if (requireNamespace("gdsfmt", quietly=TRUE))
     {

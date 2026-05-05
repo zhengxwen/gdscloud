@@ -182,6 +182,42 @@ gds <- gdsCloudOpen("az://my-container/path/to/file.gds")
 closefn.gds(gds)
 ```
 
+## URL-specific credentials
+
+Sometimes different URLs need different credentials — for example, two S3 buckets owned by different accounts, or a mix of public and private resources. Each `gdsCloudConfig*()` function accepts an optional `url` argument that associates the supplied credentials with a URL prefix rather than the global defaults:
+
+```{r auth-url}
+# Different keys for two S3 buckets
+gdsCloudConfigS3(
+    aws_access_key_id = "KEY_A",
+    aws_secret_access_key = "SECRET_A",
+    url = "s3://bucket-a/"
+)
+gdsCloudConfigS3(
+    aws_access_key_id = "KEY_B",
+    aws_secret_access_key = "SECRET_B",
+    url = "s3://bucket-b/"
+)
+
+# You can also scope credentials to a sub-prefix within a bucket
+gdsCloudConfigS3(
+    aws_access_key_id = "KEY_SHARED",
+    aws_secret_access_key = "SECRET_SHARED",
+    url = "s3://bucket-a/shared/"
+)
+
+# Remove a previously registered URL-specific entry
+gdsCloudConfigS3(url = "s3://bucket-a/")
+```
+
+When opening a URL, credentials are resolved in the following order (the first non-empty value wins for each field):
+
+1. the URL-specific entry whose registered prefix is the longest prefix of the opened URL (within the same scheme);
+2. the global values set by `gdsCloudConfig*()` with `url=NULL`;
+3. the corresponding environment variable.
+
+The URL scheme passed via `url=` must match the function — `s3://` for `gdsCloudConfigS3()`, `gs://` for `gdsCloudConfigGCS()`, and `az://` for `gdsCloudConfigAzure()`. Registered prefixes are normalized by appending a trailing `/` if missing, so `"s3://bucket"` and `"s3://bucket/"` behave identically.
+
 
 # Cache Control
 
