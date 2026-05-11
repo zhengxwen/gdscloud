@@ -134,8 +134,25 @@ static const char *sexp_str(SEXP x)
 
 
 // =====================================================================
-// Helper: build the gds.class R list from a PdGDSFile
+// Helper: set attr(file_obj$filename, "pkgname") <- "gdscloud"
 // =====================================================================
+
+static void set_pkgname_attr(SEXP file_obj)
+{
+	SEXP names = Rf_getAttrib(file_obj, R_NamesSymbol);
+	if (TYPEOF(names) == STRSXP)
+	{
+		for (R_xlen_t i = 0; i < Rf_xlength(file_obj); i++)
+		{
+			if (strcmp(CHAR(STRING_ELT(names, i)), "filename") == 0)
+			{
+				Rf_setAttrib(VECTOR_ELT(file_obj, i),
+					Rf_install("pkgname"), Rf_mkString("gdscloud"));
+				break;
+			}
+		}
+	}
+}
 
 // =====================================================================
 // .Call: Open S3 GDS file
@@ -206,6 +223,7 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 
 		g_open_streams.push_back(cs);
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		set_pkgname_attr(rv_ans);
 
 	COREARRAY_CATCH
 }
@@ -273,6 +291,7 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 
 		g_open_streams.push_back(cs);
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		set_pkgname_attr(rv_ans);
 
 	COREARRAY_CATCH
 }
@@ -345,6 +364,7 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 
 		g_open_streams.push_back(cs);
 		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		set_pkgname_attr(rv_ans);
 
 	COREARRAY_CATCH
 }

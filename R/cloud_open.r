@@ -56,14 +56,6 @@ gdsCloudSchemes <- function()
 }
 
 
-.add_pkgname <- function(ans)
-{
-    if (is.list(ans) && !is.null(ans$filename))
-        attr(ans$filename, "pkgname") <- "gdscloud"
-    ans
-}
-
-
 #############################################################
 # Internal: open from S3
 #
@@ -73,9 +65,9 @@ gdsCloudSchemes <- function()
     cred <- .get_s3_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
-    .add_pkgname(.Call(gdscloud_open_s3, url,
+    .Call(gdscloud_open_s3, url,
         cred$access_key, cred$secret_key, cred$region, cred$session_token,
-        cache_mb))
+        cache_mb)
 }
 
 
@@ -87,8 +79,7 @@ gdsCloudSchemes <- function()
     cred <- .get_gcs_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
-    .add_pkgname(.Call(gdscloud_open_gcs, url, cred$access_token,
-        cache_mb))
+    .Call(gdscloud_open_gcs, url, cred$access_token, cache_mb)
 }
 
 
@@ -100,7 +91,6 @@ gdsCloudSchemes <- function()
     cred <- .get_azure_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
-    .add_pkgname(.Call(gdscloud_open_azure, url,
-        cred$account_name, cred$account_key, cred$sas_token,
-        cache_mb))
+    .Call(gdscloud_open_azure, url,
+        cred$account_name, cred$account_key, cred$sas_token, cache_mb)
 }
