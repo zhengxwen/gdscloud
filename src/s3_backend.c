@@ -299,19 +299,88 @@ static long long s3_read_range(void *backend_data, const char *url,
 
 
 // =====================================================================
-// S3 backend: get_size (HEAD request)
+// S3 backend: get_size
+//
+// Uses GET with Range: bytes=0-0 instead of HEAD so that, on error,
+// S3's XML error body (e.g. <Code>AccessDenied</Code>,
+// <Code>InvalidAccessKeyId</Code>, <Code>PermanentRedirect</Code>)
+// is returned to the client. HEAD requests return an empty body on
+// error, losing all diagnostic detail. On success, the server returns
+// Content-Range: bytes 0-0/<TOTAL>, from which the file size is parsed.
 // =====================================================================
 
-static size_t curl_header_cb(char *buffer, size_t size, size_t nitems,
+typedef struct {
+	long long file_size;        // parsed from Content-Range or Content-Length
+	char bucket_region[64];     // parsed from x-amz-bucket-region (if any)
+	char request_id[64];        // parsed from x-amz-request-id (if any)
+} S3HeadInfo;
+
+static long long parse_content_range_total(const char *value)
+{
+	// Expected: "bytes 0-0/12345" — return the part after '/'
+	const char *slash = strchr(value, '/');
+	if (!slash) return -1;
+	slash++;
+	while (*slash == ' ') slash++;
+	if (*slash == '*') return -1;
+	return strtoll(slash, NULL, 10);
+}
+
+static void copy_header_value(const char *buffer, size_t total,
+	size_t prefix_len, char *out, size_t out_size)
+{
+	// buffer is "Header-Name: value\r\n" with prefix_len covering "Header-Name:"
+	const char *p = buffer + prefix_len;
+	size_t remaining = (total > prefix_len) ? (total - prefix_len) : 0;
+	while (remaining > 0 && (*p == ' ' || *p == '\t'))
+	{
+		p++;
+		remaining--;
+	}
+	// strip trailing CR/LF/whitespace
+	while (remaining > 0 &&
+		(p[remaining - 1] == '\r' || p[remaining - 1] == '\n' ||
+		 p[remaining - 1] == ' '  || p[remaining - 1] == '\t'))
+	{
+		remaining--;
+	}
+	size_t n = (remaining < out_size - 1) ? remaining : (out_size - 1);
+	memcpy(out, p, n);
+	out[n] = '\0';
+}
+
+static size_t s3_getsize_header_cb(char *buffer, size_t size, size_t nitems,
 	void *userdata)
 {
-	long long *file_size = (long long *)userdata;
+	S3HeadInfo *info = (S3HeadInfo *)userdata;
 	size_t total = size * nitems;
 
-	// look for Content-Length header
-	if (total > 16 && strncasecmp(buffer, "content-length:", 15) == 0)
+	if (total > 14 && strncasecmp(buffer, "content-range:", 14) == 0)
 	{
-		*file_size = strtoll(buffer + 15, NULL, 10);
+		char value[128];
+		copy_header_value(buffer, total, 14, value, sizeof(value));
+		long long sz = parse_content_range_total(value);
+		if (sz >= 0) info->file_size = sz;
+	}
+	else if (info->file_size < 0 && total > 15 &&
+		strncasecmp(buffer, "content-length:", 15) == 0)
+	{
+		// fallback: use Content-Length if Content-Range is absent (HTTP 200)
+		char value[64];
+		copy_header_value(buffer, total, 15, value, sizeof(value));
+		info->file_size = strtoll(value, NULL, 10);
+	}
+	else if (total > 21 &&
+		strncasecmp(buffer, "x-amz-bucket-region:", 20) == 0)
+	{
+		copy_header_value(buffer, total, 20,
+			info->bucket_region, sizeof(info->bucket_region));
+	}
+	else if (total > 18 &&
+		strncasecmp(buffer, "x-amz-request-id:", 17) == 0)
+	{
+		copy_header_value(buffer, total, 17,
+			info->request_id, sizeof(info->request_id));
 	}
 	return total;
 }
@@ -324,6 +393,10 @@ static long long s3_get_size(void *backend_data, const char *url)
 
 	struct curl_slist *headers = NULL;
 
+	// Use a 1-byte GET (Range: bytes=0-0) rather than HEAD so that S3
+	// returns a useful XML error body on failure.
+	static const char *range_canon = "bytes=0-0";
+
 	// only sign the request when credentials are provided
 	if (s3->access_key[0] && s3->secret_key[0])
 	{
@@ -331,8 +404,8 @@ static long long s3_get_size(void *backend_data, const char *url)
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 		char auth_hdr[2048], date_hdr[128], token_hdr[1024];
-		aws_sigv4_sign(s3, "HEAD", s3->object_key, "",
-			empty_hash, NULL, 0, 0,
+		aws_sigv4_sign(s3, "GET", s3->object_key, "",
+			empty_hash, range_canon, 0, 0,
 			auth_hdr, sizeof(auth_hdr),
 			date_hdr, sizeof(date_hdr),
 			token_hdr, sizeof(token_hdr));
@@ -348,14 +421,30 @@ static long long s3_get_size(void *backend_data, const char *url)
 			headers = curl_slist_append(headers, token_hdr);
 	}
 
-	long long file_size = -1;
+	char range_hdr[64];
+	snprintf(range_hdr, sizeof(range_hdr), "Range: %s", range_canon);
+	headers = curl_slist_append(headers, range_hdr);
+
+	// Collect the response body (small on success: 1 byte; larger on error:
+	// the XML error document). 4 KB is enough for any S3 error envelope.
+	unsigned char body_buf[4096];
+	CurlBuffer body_cb;
+	body_cb.buf = body_buf;
+	body_cb.size = 0;
+	body_cb.capacity = (long long)sizeof(body_buf);
+
+	S3HeadInfo info;
+	info.file_size = -1;
+	info.bucket_region[0] = '\0';
+	info.request_id[0] = '\0';
 
 	curl_easy_reset(s3->curl);
 	curl_easy_setopt(s3->curl, CURLOPT_URL, s3->endpoint);
-	curl_easy_setopt(s3->curl, CURLOPT_NOBODY, 1L);  // HEAD request
 	curl_easy_setopt(s3->curl, CURLOPT_HTTPHEADER, headers);
-	curl_easy_setopt(s3->curl, CURLOPT_HEADERFUNCTION, curl_header_cb);
-	curl_easy_setopt(s3->curl, CURLOPT_HEADERDATA, &file_size);
+	curl_easy_setopt(s3->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
+	curl_easy_setopt(s3->curl, CURLOPT_WRITEDATA, &body_cb);
+	curl_easy_setopt(s3->curl, CURLOPT_HEADERFUNCTION, s3_getsize_header_cb);
+	curl_easy_setopt(s3->curl, CURLOPT_HEADERDATA, &info);
 	curl_easy_setopt(s3->curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(s3->curl, CURLOPT_FOLLOWLOCATION, 1L);
 
@@ -371,14 +460,33 @@ static long long s3_get_size(void *backend_data, const char *url)
 
 	long http_code = 0;
 	curl_easy_getinfo(s3->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200)
+	// 206 Partial Content for Range:0-0 success; 200 for servers that
+	// ignore the Range header and return the full body (we still parse
+	// Content-Length in that case).
+	if (http_code != 200 && http_code != 206)
 	{
 		cloud_format_error(s3->last_error, sizeof(s3->last_error),
-			"S3", s3->endpoint, CURLE_OK, http_code, NULL, 0);
+			"S3", s3->endpoint, CURLE_OK, http_code, body_cb.buf, body_cb.size);
+
+		// Append a region-mismatch hint when the bucket is actually in a
+		// different region than we configured — this is the most common
+		// cause of otherwise-opaque 403s on S3.
+		if (info.bucket_region[0] &&
+			strcmp(info.bucket_region, s3->region) != 0)
+		{
+			size_t cur = strlen(s3->last_error);
+			if (cur + 1 < sizeof(s3->last_error))
+			{
+				snprintf(s3->last_error + cur, sizeof(s3->last_error) - cur,
+					" [Hint: bucket region is '%s' but the request was "
+					"signed for '%s'; set region='%s' in gdsCloudConfigS3()]",
+					info.bucket_region, s3->region, info.bucket_region);
+			}
+		}
 		return -1;
 	}
 
-	return file_size;
+	return info.file_size;
 }
 
 
