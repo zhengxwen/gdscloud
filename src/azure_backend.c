@@ -71,13 +71,49 @@ static size_t azure_curl_write_cb(void *data, size_t size, size_t nmemb,
 // Helper: header callback
 // =====================================================================
 
-static size_t azure_header_cb(char *buffer, size_t size, size_t nitems,
+// Parse total size from "Content-Range: bytes 0-0/<TOTAL>".
+static long long azure_parse_content_range_total(const char *value)
+{
+	const char *slash = strchr(value, '/');
+	if (!slash) return -1;
+	slash++;
+	while (*slash == ' ') slash++;
+	if (*slash == '*') return -1;
+	return strtoll(slash, NULL, 10);
+}
+
+// Header callback used by azure_get_size (GET+Range:0-0).
+// Prefers Content-Range's total; otherwise falls back to
+// x-ms-blob-content-length (the full-blob size) and finally Content-Length.
+static size_t azure_getsize_header_cb(char *buffer, size_t size, size_t nitems,
 	void *userdata)
 {
 	long long *file_size = (long long *)userdata;
 	size_t total = size * nitems;
-	if (total > 16 && strncasecmp(buffer, "content-length:", 15) == 0)
+
+	if (total > 14 && strncasecmp(buffer, "content-range:", 14) == 0)
+	{
+		const char *p = buffer + 14;
+		size_t remaining = total - 14;
+		while (remaining > 0 && (*p == ' ' || *p == '\t'))
+			{ p++; remaining--; }
+		char value[128];
+		size_t n = (remaining < sizeof(value) - 1) ? remaining : sizeof(value) - 1;
+		memcpy(value, p, n);
+		value[n] = '\0';
+		long long sz = azure_parse_content_range_total(value);
+		if (sz >= 0) *file_size = sz;
+	}
+	else if (*file_size < 0 && total > 26 &&
+		strncasecmp(buffer, "x-ms-blob-content-length:", 25) == 0)
+	{
+		*file_size = strtoll(buffer + 25, NULL, 10);
+	}
+	else if (*file_size < 0 && total > 16 &&
+		strncasecmp(buffer, "content-length:", 15) == 0)
+	{
 		*file_size = strtoll(buffer + 15, NULL, 10);
+	}
 	return total;
 }
 
@@ -276,6 +312,13 @@ static long long azure_read_range(void *backend_data, const char *url,
 
 // =====================================================================
 // Azure backend: get_size
+//
+// Uses GET with Range: bytes=0-0 instead of HEAD so that, on error,
+// Azure returns its XML error body (e.g. <Error><Code>AuthenticationFailed
+// </Code>...<AuthenticationErrorDetail>...</AuthenticationErrorDetail>)
+// that can be surfaced to the user. HEAD requests return an empty body
+// on error, losing all diagnostic detail. On success, the server returns
+// Content-Range: bytes 0-0/<TOTAL>, from which the file size is parsed.
 // =====================================================================
 
 static long long azure_get_size(void *backend_data, const char *url)
@@ -301,20 +344,30 @@ static long long azure_get_size(void *backend_data, const char *url)
 		char resource_path[CLOUD_MAX_URL_LEN];
 		snprintf(resource_path, sizeof(resource_path),
 			"/%s/%s", az->container, az->blob_name);
-		azure_sign_request(az, "HEAD", resource_path, NULL,
+		// sign as GET with Range: bytes=0-0 (must match the actual request)
+		azure_sign_request(az, "GET", resource_path, "bytes=0-0",
 			auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
 		headers = curl_slist_append(headers, auth_hdr);
 		headers = curl_slist_append(headers, date_hdr);
 		headers = curl_slist_append(headers, "x-ms-version: 2020-10-02");
 	}
+	headers = curl_slist_append(headers, "Range: bytes=0-0");
+
+	// Collect the response body: 1 byte on success, XML error on failure.
+	unsigned char body_buf[4096];
+	AzureCurlBuffer body_cb;
+	body_cb.buf = body_buf;
+	body_cb.size = 0;
+	body_cb.capacity = (long long)sizeof(body_buf);
 
 	long long file_size = -1;
 
 	curl_easy_reset(az->curl);
 	curl_easy_setopt(az->curl, CURLOPT_URL, url_str);
-	curl_easy_setopt(az->curl, CURLOPT_NOBODY, 1L);
 	curl_easy_setopt(az->curl, CURLOPT_HTTPHEADER, headers);
-	curl_easy_setopt(az->curl, CURLOPT_HEADERFUNCTION, azure_header_cb);
+	curl_easy_setopt(az->curl, CURLOPT_WRITEFUNCTION, azure_curl_write_cb);
+	curl_easy_setopt(az->curl, CURLOPT_WRITEDATA, &body_cb);
+	curl_easy_setopt(az->curl, CURLOPT_HEADERFUNCTION, azure_getsize_header_cb);
 	curl_easy_setopt(az->curl, CURLOPT_HEADERDATA, &file_size);
 	curl_easy_setopt(az->curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(az->curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -331,10 +384,13 @@ static long long azure_get_size(void *backend_data, const char *url)
 
 	long http_code = 0;
 	curl_easy_getinfo(az->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200)
+	// 206 Partial Content for Range:0-0 success; 200 if the server ignored
+	// the Range header and returned the full body.
+	if (http_code != 200 && http_code != 206)
 	{
 		cloud_format_error(az->last_error, sizeof(az->last_error),
-			"Azure", az->endpoint, CURLE_OK, http_code, NULL, 0);
+			"Azure", az->endpoint, CURLE_OK, http_code,
+			body_cb.buf, body_cb.size);
 		return -1;
 	}
 
