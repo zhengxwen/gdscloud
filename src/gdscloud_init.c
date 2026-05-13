@@ -6,7 +6,7 @@
 // Copyright (C) 2026    Xiuwen Zheng
 //
 // This file is part of gdscloud.
-// GPL-3 License
+// LGPL-3 License
 // ===========================================================
 
 #include <R.h>
