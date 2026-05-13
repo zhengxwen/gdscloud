@@ -6,7 +6,7 @@
 // Copyright (C) 2026    Xiuwen Zheng
 //
 // This file is part of gdscloud.
-// LGPL-3 License
+// GPL-3 License
 // ===========================================================
 
 #include "cloud_stream.h"
@@ -27,6 +27,11 @@ static std::vector<CloudStream*> g_open_streams;
 
 // External declarations from C backend files
 extern "C" {
+
+typedef struct HTTPBackendData HTTPBackendData;
+extern HTTPBackendData *http_backend_create(const char *url,
+	const char *auth_header);
+extern CloudBackend http_backend_vtable;
 
 typedef struct S3BackendData S3BackendData;
 extern S3BackendData *s3_backend_create(const char *s3_url,
@@ -153,6 +158,74 @@ static void set_pkgname_attr(SEXP file_obj)
 		}
 	}
 }
+
+// =====================================================================
+// .Call: Open HTTP/HTTPS GDS file
+// =====================================================================
+
+extern "C" SEXP gdscloud_open_http(SEXP url, SEXP auth_header,
+	SEXP cache_size_mb)
+{
+	const char *c_url  = sexp_str(url);
+	const char *c_auth = sexp_str(auth_header);
+	double c_cache = Rf_asReal(cache_size_mb);
+
+	COREARRAY_TRY
+
+		// validate URL format
+		if (!c_url || !c_url[0])
+			throw ErrGDSCloud("HTTP URL is empty or missing");
+		if (strncmp(c_url, "http://", 7) != 0 && strncmp(c_url, "https://", 8) != 0)
+			throw ErrGDSCloud("Invalid HTTP URL '%s': must start with 'http://' or 'https://'", c_url);
+
+		// create HTTP backend
+		HTTPBackendData *http = http_backend_create(c_url, c_auth);
+		if (!http)
+			throw ErrGDSCloud("Failed to create HTTP backend for '%s'", c_url);
+
+		long long max_cache = (long long)(c_cache * 1024 * 1024);
+		CloudStream *cs = cloud_stream_create(c_url,
+			&http_backend_vtable, http, CLOUD_BLOCK_SIZE, max_cache);
+		if (!cs)
+		{
+			http_backend_vtable.close(http);
+			throw ErrGDSCloud("Failed to create cloud stream for '%s'", c_url);
+		}
+
+		// pre-check file access to get detailed error on failure
+		if (cloud_stream_getsize(cs) < 0)
+		{
+			const char *err = cloud_stream_get_last_error(cs);
+			std::string msg = (err && err[0]) ? std::string(err)
+				: std::string("Failed to access '") + c_url + "'";
+			cloud_stream_close(cs);
+			throw ErrGDSCloud(msg);
+		}
+
+		PdGDSFile file = GDS_File_Open_Callback(
+			cs,
+			(TdCbStreamRead)gdscloud_cb_read,
+			(TdCbStreamWrite)NULL,
+			(TdCbStreamSeek)gdscloud_cb_seek,
+			(TdCbStreamGetSize)gdscloud_cb_getsize,
+			(TdCbStreamSetSize)NULL,
+			(TdCbStreamClose)gdscloud_cb_close,
+			TRUE, FALSE);
+
+		if (!file)
+		{
+			cloud_stream_close(cs);
+			throw ErrGDSCloud("Failed to open GDS file from '%s': "
+				"the file may not exist, access may be denied, or it is not a valid GDS file", c_url);
+		}
+
+		g_open_streams.push_back(cs);
+		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		set_pkgname_attr(rv_ans);
+
+	COREARRAY_CATCH
+}
+
 
 // =====================================================================
 // .Call: Open S3 GDS file

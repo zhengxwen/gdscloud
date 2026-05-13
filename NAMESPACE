@@ -1,5 +1,6 @@
 # Dynamically load the compiled C/C++ shared library
 useDynLib(gdscloud,
+    gdscloud_open_http,
     gdscloud_open_s3, gdscloud_open_gcs, gdscloud_open_azure,
     gdscloud_cache_clear, gdscloud_cache_info, gdscloud_list_streams)
 
@@ -9,6 +10,7 @@ import(gdsfmt)
 # Export the following names
 export(
     gdsCloudOpen,
+    gdsCloudConfigHTTP,
     gdsCloudConfigS3,
     gdsCloudConfigGCS,
     gdsCloudConfigAzure,

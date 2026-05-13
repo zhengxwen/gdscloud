@@ -1,13 +1,11 @@
 # gdscloud: Cloud Storage Access for GDS Files
 
-GDS (Genomic Data Structure) is a high-performance file format for storing and
-accessing large-scale genomic data, implemented by the
-[gdsfmt](https://bioconductor.org/packages/gdsfmt) package. It supports
-hierarchical data organization with efficient random access and data compression.
+GDS (Genomic Data Structure) is a high-performance file format for storing and accessing large-scale genomic data, implemented by the [gdsfmt](https://bioconductor.org/packages/gdsfmt) package. It supports hierarchical data organization with efficient random access and data compression.
 
 The `gdscloud` package extends `gdsfmt` to provide transparent read-only access
-to GDS files stored on cloud storage services:
+to GDS files stored on cloud storage services or any HTTP/HTTPS URL:
 
+- **HTTP/HTTPS** (`http://` or `https://` URLs)
 - **Amazon S3** (`s3://bucket/key`)
 - **Google Cloud Storage** (`gs://bucket/key`)
 - **Azure Blob Storage** (`az://container/blob`)
@@ -78,9 +76,32 @@ read.gdsn(index.gdsn(gds, "position"))
 closefn.gds(gds)
 ```
 
-**Note:** SeqArray >= v1.53.1 is recommended for full cloud support. This version allows `seqParallel()` to automatically load cloud-related packages on worker processes, so parallel operations on cloud-hosted GDS files work seamlessly.
+**Note:**
+
+* SeqArray >= v1.53.1 is recommended for full cloud support. This version allows `seqParallel()` to automatically load cloud-related packages on worker processes, so parallel operations on cloud-hosted GDS files work seamlessly.
 
 ## Authentication
+
+### HTTP/HTTPS
+
+For public URLs, no authentication is needed:
+```r
+gds <- gdsCloudOpen("https://example.com/path/to/file.gds")
+closefn.gds(gds)
+```
+
+For authenticated endpoints, set a Bearer token via environment variable:
+```bash
+export GDSCLOUD_HTTP_TOKEN=your_token
+```
+
+Or configure in R:
+```r
+gdsCloudConfigHTTP(bearer_token = "your_token")
+
+# URL-specific token
+gdsCloudConfigHTTP(bearer_token = "other_token", url = "https://private.example.com/")
+```
 
 ### AWS S3
 Set environment variables:

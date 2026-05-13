@@ -5,15 +5,15 @@
 # Copyright (C) 2026    Xiuwen Zheng
 #
 # This is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Lesser General Public License Version 3 as
+# under the terms of the GNU General Public License Version 3 as
 # published by the Free Software Foundation.
 #
 # gdscloud is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Lesser General Public License for more details.
+# GNU General Public License for more details.
 #
-# You should have received a copy of the GNU Lesser General Public
+# You should have received a copy of the GNU General Public
 # License along with gdscloud.
 # If not, see <http://www.gnu.org/licenses/>.
 
@@ -118,6 +118,24 @@
 
 
 #############################################################
+# Configure HTTP/HTTPS credentials (optional Bearer token)
+#
+gdsCloudConfigHTTP <- function(bearer_token=NULL, url=NULL)
+{
+    if (is.null(url))
+    {
+        if (!is.null(bearer_token))
+            .gdscloud_env$http_bearer_token <- bearer_token
+    } else {
+        .set_url_credentials(url, sub("://.*", "", url), list(
+            http_bearer_token = bearer_token
+        ))
+    }
+    invisible()
+}
+
+
+#############################################################
 # Configure AWS S3 credentials
 #
 gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
@@ -186,6 +204,22 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
         ))
     }
     invisible()
+}
+
+
+#############################################################
+# Internal: get HTTP/HTTPS credentials
+#
+.get_http_credentials <- function(url=NULL)
+{
+    scheme <- sub("://.*", "", url)
+    m <- .match_url_credentials(url, scheme)
+    list(
+        bearer_token = .first_nonempty(
+            m$http_bearer_token,
+            .gdscloud_env$http_bearer_token,
+            Sys.getenv("GDSCLOUD_HTTP_TOKEN", ""))
+    )
 }
 
 
@@ -268,7 +302,9 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
         # GCS
         "gcs_access_token",
         # Azure
-        "azure_account_name", "azure_account_key", "azure_sas_token"
+        "azure_account_name", "azure_account_key", "azure_sas_token",
+        # HTTP
+        "http_bearer_token"
     )
     ans <- lapply(nms, function(nm) .gdscloud_env[[nm]])
     names(ans) <- nms

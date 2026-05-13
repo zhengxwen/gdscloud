@@ -5,15 +5,15 @@
 # Copyright (C) 2026    Xiuwen Zheng
 #
 # This is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Lesser General Public License Version 3 as
+# under the terms of the GNU General Public License Version 3 as
 # published by the Free Software Foundation.
 #
 # gdscloud is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Lesser General Public License for more details.
+# GNU General Public License for more details.
 #
-# You should have received a copy of the GNU Lesser General Public
+# You should have received a copy of the GNU General Public
 # License along with gdscloud.
 # If not, see <http://www.gnu.org/licenses/>.
 
@@ -28,15 +28,17 @@ gdsCloudOpen <- function(url, allow.error=FALSE)
 
     # parse the URL scheme
     scheme <- sub("://.*", "", url)
-    if (!scheme %in% c("s3", "gs", "az"))
+    if (!scheme %in% c("http", "https", "s3", "gs", "az"))
         stop("Unsupported URL scheme: '", scheme, "'. ",
-             "Supported schemes: s3://, gs://, az://")
+             "Supported schemes: http://, https://, s3://, gs://, az://")
 
     # dispatch to the appropriate backend
     ans <- switch(scheme,
-        "s3"  = .open_s3(url, allow.error),
-        "gs"  = .open_gcs(url, allow.error),
-        "az"  = .open_azure(url, allow.error)
+        "http"  = .open_http(url, allow.error),
+        "https" = .open_http(url, allow.error),
+        "s3"    = .open_s3(url, allow.error),
+        "gs"    = .open_gcs(url, allow.error),
+        "az"    = .open_azure(url, allow.error)
     )
 
     ans
@@ -49,10 +51,28 @@ gdsCloudOpen <- function(url, allow.error=FALSE)
 gdsCloudSchemes <- function()
 {
     c(
-        s3  = "Amazon S3",
-        gs  = "Google Cloud Storage",
-        az  = "Azure Blob Storage"
+        http  = "HTTP",
+        https = "HTTPS",
+        s3    = "Amazon S3",
+        gs    = "Google Cloud Storage",
+        az    = "Azure Blob Storage"
     )
+}
+
+
+#############################################################
+# Internal: open from HTTP/HTTPS
+#
+.open_http <- function(url, allow.error=FALSE)
+{
+    cred <- .get_http_credentials(url)
+    cache_mb <- .gdscloud_env$cache_size_mb
+    # Build auth header string (e.g. "Bearer <token>")
+    auth_header <- ""
+    if (nzchar(cred$bearer_token))
+        auth_header <- paste("Bearer", cred$bearer_token)
+    # Call C function with auth header and cache size
+    .Call(gdscloud_open_http, url, auth_header, cache_mb)
 }
 
 

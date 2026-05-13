@@ -1,7 +1,7 @@
 test_that("gdsCloudOpen rejects invalid URL schemes", {
-    expect_error(gdsCloudOpen("http://example.com/file.gds"),
-        "Unsupported URL scheme")
     expect_error(gdsCloudOpen("ftp://example.com/file.gds"),
+        "Unsupported URL scheme")
+    expect_error(gdsCloudOpen("ssh://example.com/file.gds"),
         "Unsupported URL scheme")
 })
 

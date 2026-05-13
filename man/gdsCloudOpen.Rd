@@ -4,7 +4,7 @@
 \description{
     Opens a read-only GDS (Genomic Data Structure) file from cloud storage
     services including Amazon S3, Google Cloud Storage, and Azure Blob
-    Storage.
+    Storage, or from any HTTP/HTTPS URL.
 }
 \usage{
 gdsCloudOpen(url, allow.error=FALSE)
@@ -12,7 +12,8 @@ gdsCloudOpen(url, allow.error=FALSE)
 \arguments{
     \item{url}{a character string specifying the cloud URL, e.g.,
         \code{"s3://bucket/key"}, \code{"gs://bucket/key"},
-        or \code{"az://container/blob"}}
+        \code{"az://container/blob"}, or
+        \code{"https://example.com/path/to/file.gds"}}
     \item{allow.error}{if \code{TRUE}, return the GDS file object even if
         there are errors in the file structure}
 }
@@ -23,7 +24,8 @@ gdsCloudOpen(url, allow.error=FALSE)
 \details{
     The function automatically detects the URL scheme and uses the
     appropriate cloud backend. Authentication credentials are read from
-    environment variables or from values set via \code{\link{gdsCloudConfigS3}}.
+    environment variables or from values set via \code{\link{gdsCloudConfigS3}},
+    \code{\link{gdsCloudConfigHTTP}}, etc.
 
     All cloud access is read-only. The file data is cached in memory using
     an LRU block cache (default 64 MB) for efficient random access.
@@ -33,7 +35,8 @@ gdsCloudOpen(url, allow.error=FALSE)
     to this function.
 }
 \seealso{
-    \code{\link{gdsCloudConfigS3}}, \code{\link{gdsCloudCacheSize}},
+    \code{\link{gdsCloudConfigS3}}, \code{\link{gdsCloudConfigHTTP}},
+    \code{\link{gdsCloudCacheSize}},
     \code{\link[gdsfmt]{openfn.gds}}, \code{\link[gdsfmt]{closefn.gds}}
 }
 \examples{
@@ -52,6 +55,15 @@ closefn.gds(gds)
 
 # Or transparently via openfn.gds (when gdscloud is loaded)
 gds <- openfn.gds("s3://my-bucket/data/example.gds")
+closefn.gds(gds)
+
+# Open from an HTTP/HTTPS URL (public, no auth needed)
+gds <- gdsCloudOpen("https://example.com/data/example.gds")
+closefn.gds(gds)
+
+# Authenticated HTTP endpoint
+gdsCloudConfigHTTP(bearer_token = "my-secret-token")
+gds <- gdsCloudOpen("https://private.example.com/data/example.gds")
 closefn.gds(gds)
 }
 }

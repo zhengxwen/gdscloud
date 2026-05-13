@@ -1,7 +1,11 @@
-CHANGES IN VERSION 0.1.0
+CHANGES IN VERSION 0.99.0
 -------------------------
 
 NEW FEATURES
+
+    o Direct support for HTTP/HTTPS URLs (`http://` and `https://`) in
+      `gdsCloudOpen()`, allowing GDS files to be opened from any web server
+      that supports HTTP Range requests
 
     o Cloud storage access for GDS files via Amazon S3 (`s3://`), Google
       Cloud Storage (`gs://`), and Azure Blob Storage (`az://`)
@@ -11,6 +15,10 @@ NEW FEATURES
 
     o LRU block cache (1 MB blocks, default 64 MB) for efficient random
       access with minimal HTTP requests
+
+    o `gdsCloudConfigHTTP()` for configuring optional Bearer token
+      authentication for HTTP/HTTPS endpoints; also reads the
+      `GDSCLOUD_HTTP_TOKEN` environment variable as a fallback
 
     o Credential configuration functions: `gdsCloudConfigS3()`,
       `gdsCloudConfigGCS()`, `gdsCloudConfigAzure()`, with fallback to

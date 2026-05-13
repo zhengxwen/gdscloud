@@ -7,7 +7,7 @@
 // Copyright (C) 2026    Xiuwen Zheng
 //
 // This file is part of gdscloud.
-// LGPL-3 License
+// GPL-3 License
 // ===========================================================
 
 #ifndef GDSCLOUD_OPENSSL_COMPAT_H

@@ -10,16 +10,18 @@ gdsCloudSchemes()
 }
 \value{
     A named character vector where names are the URL scheme prefixes
-    (\code{"s3"}, \code{"gs"}, \code{"az"}) and values are the
-    storage service descriptions.
+    (\code{"s3"}, \code{"gs"}, \code{"az"}, \code{"http"}, \code{"https"})
+    and values are the storage service descriptions.
 }
 \seealso{
     \code{\link{gdsCloudOpen}}
 }
 \examples{
 gdsCloudSchemes()
-##                    s3                   gs                   az
-##          "Amazon S3" "Google Cloud Storage"  "Azure Blob Storage"
+##        s3                     gs                   az
+## "Amazon S3" "Google Cloud Storage" "Azure Blob Storage"
+##      http    https
+##    "HTTP"  "HTTPS"
 }
 \keyword{GDS}
 \keyword{cloud}

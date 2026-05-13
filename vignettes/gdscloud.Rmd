@@ -23,8 +23,9 @@ GDS (Genomic Data Structure) is a high-performance file format for storing and a
 
 The **gdscloud** package extends gdsfmt to provide transparent read-only access to GDS files stored on cloud storage services. It uses HTTP Range requests via libcurl with an efficient LRU block cache to minimize network overhead.
 
-Supported cloud storage backends:
+Supported backends:
 
+- **HTTP/HTTPS** — any `http://` or `https://` URL (public or authenticated)
 - **Amazon S3** — URLs of the form `s3://bucket/key`
 - **Google Cloud Storage** — URLs of the form `gs://bucket/key`
 - **Azure Blob Storage** — URLs of the form `az://container/blob`
@@ -98,6 +99,42 @@ closefn.gds(gds)
 # Authentication
 
 Each cloud backend requires credentials. Credentials can be set either via environment variables (recommended for non-interactive use) or via R functions (convenient for interactive sessions). R-configured credentials take priority over environment variables.
+
+## HTTP/HTTPS
+
+For public URLs (e.g., files hosted on a web server with Range request support), no credentials are needed:
+
+```{r open-http-public}
+gds <- gdsCloudOpen("https://example.com/path/to/file.gds")
+closefn.gds(gds)
+```
+
+For authenticated HTTP endpoints, set a Bearer token:
+
+**Environment variable:**
+
+```bash
+export GDSCLOUD_HTTP_TOKEN=your_bearer_token
+```
+
+**R configuration:**
+
+```{r auth-http}
+gdsCloudConfigHTTP(bearer_token = "your_bearer_token")
+
+# URL-specific token for a private server
+gdsCloudConfigHTTP(
+    bearer_token = "token_for_private_server",
+    url = "https://private.example.com/"
+)
+```
+
+Then open:
+
+```{r open-http}
+gds <- gdsCloudOpen("https://private.example.com/data/file.gds")
+closefn.gds(gds)
+```
 
 ## Amazon S3
 
@@ -216,7 +253,7 @@ When opening a URL, credentials are resolved in the following order (the first n
 2. the global values set by `gdsCloudConfig*()` with `url=NULL`;
 3. the corresponding environment variable.
 
-The URL scheme passed via `url=` must match the function — `s3://` for `gdsCloudConfigS3()`, `gs://` for `gdsCloudConfigGCS()`, and `az://` for `gdsCloudConfigAzure()`. Registered prefixes are normalized by appending a trailing `/` if missing, so `"s3://bucket"` and `"s3://bucket/"` behave identically.
+The URL scheme passed via `url=` must match the function — `http://` or `https://` for `gdsCloudConfigHTTP()`, `s3://` for `gdsCloudConfigS3()`, `gs://` for `gdsCloudConfigGCS()`, and `az://` for `gdsCloudConfigAzure()`. Registered prefixes are normalized by appending a trailing `/` if missing, so `"s3://bucket"` and `"s3://bucket/"` behave identically.
 
 
 # Cache Control
