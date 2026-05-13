@@ -40,8 +40,11 @@ test_that(".open_http rejects non-http URLs at C level", {
 
 test_that("gdsCloudOpen accepts http:// and https:// schemes", {
     # These should fail with a network/access error, not a scheme error
-    expect_error(gdsCloudOpen("http://invalid.test/nonexistent.gds"),
-        "Unsupported URL scheme", fixed=FALSE, invert=TRUE)
-    expect_error(gdsCloudOpen("https://invalid.test/nonexistent.gds"),
-        "Unsupported URL scheme", fixed=FALSE, invert=TRUE)
+    err1 <- tryCatch(gdsCloudOpen("http://invalid.test/nonexistent.gds"),
+        error = function(e) conditionMessage(e))
+    expect_false(grepl("Unsupported URL scheme", err1))
+
+    err2 <- tryCatch(gdsCloudOpen("https://invalid.test/nonexistent.gds"),
+        error = function(e) conditionMessage(e))
+    expect_false(grepl("Unsupported URL scheme", err2))
 })
