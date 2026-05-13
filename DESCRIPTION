@@ -13,7 +13,7 @@ Description: Provides read-only access to GDS (Genomic Data Structure) files
     Range requests via libcurl.
 Depends: R (>= 3.5.0), gdsfmt (>= 1.49.1)
 LinkingTo: gdsfmt
-Suggests: BiocStyle, knitr, rmarkdown, testthat
+Suggests: BiocParallel, BiocStyle, knitr, rmarkdown, testthat
 VignetteBuilder: knitr
 License: LGPL-3
 SystemRequirements: libcurl (>= 7.28.0)
