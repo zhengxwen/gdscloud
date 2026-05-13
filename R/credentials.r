@@ -361,7 +361,7 @@ gdsCloudExportCredentials <- function(cl)
             stop("The 'BiocParallel' package is required.")
         n <- BiocParallel::bpnworkers(cl)
         BiocParallel::bplapply(seq_len(n),
-            function(i, creds) gdscloud:::.install_credentials(creds),
+            function(i, creds) .install_credentials(creds),
             creds=creds, BPPARAM=cl)
         return(invisible(TRUE))
     }
