@@ -21,18 +21,13 @@ gdsCloudList()
     \code{\link{gdsCloudOpen}}, \code{\link{gdsCloudCacheInfo}}
 }
 \examples{
-\dontrun{
-gds1 <- gdsCloudOpen("s3://bucket/file1.gds")
-gds2 <- gdsCloudOpen("gs://bucket/file2.gds")
-
-# List all open cloud streams
+# List currently open cloud streams (empty if none open)
 gdsCloudList()
-##                          url file_size cache_blocks cache_hits cache_misses
-## 1    s3://bucket/file1.gds  86500000           12         50            12
-## 2    gs://bucket/file2.gds  42000000            8         30             8
 
-closefn.gds(gds1)
-closefn.gds(gds2)
+\dontrun{
+gds <- gdsCloudOpen("s3://gds-stat/download/hapmap/hapmap_r23a.gds")
+gdsCloudList()
+closefn.gds(gds)
 }
 }
 \keyword{GDS}

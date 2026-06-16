@@ -13,7 +13,7 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(eval=FALSE)
+knitr::opts_chunk$set(collapse=TRUE)
 ```
 
 
@@ -33,10 +33,20 @@ Supported backends:
 
 # Installation
 
-```{r install}
+```R
 if (!requireNamespace("BiocManager", quietly=TRUE))
     install.packages("BiocManager")
 BiocManager::install("gdscloud")
+```
+
+
+# Supported URL Schemes
+
+gdscloud recognizes the following URL schemes:
+
+```{r schemes}
+library(gdscloud)
+gdsCloudSchemes()
 ```
 
 
@@ -44,7 +54,7 @@ BiocManager::install("gdscloud")
 
 Once gdscloud is loaded, `openfn.gds()` from the gdsfmt package automatically recognizes cloud URLs and opens them transparently:
 
-```{r quickstart, eval=TRUE}
+```{r quickstart}
 library(gdscloud)
 
 # Open a GDS file from S3 — transparent via openfn.gds()
@@ -60,7 +70,7 @@ closefn.gds(gds)
 
 Alternatively, use the explicit function:
 
-```{r explicit}
+```{r explicit, eval=FALSE}
 gds <- gdsCloudOpen("s3://my-bucket/data/example.gds")
 closefn.gds(gds)
 ```
@@ -74,7 +84,7 @@ Each cloud backend requires credentials. Credentials can be set either via envir
 
 For public URLs (e.g., files hosted on a web server with Range request support), no credentials are needed:
 
-```{r open-http-public}
+```{r open-http-public, eval=FALSE}
 gds <- gdsCloudOpen("https://example.com/path/to/file.gds")
 closefn.gds(gds)
 ```
@@ -101,7 +111,7 @@ gdsCloudConfigHTTP(
 
 Then open:
 
-```{r open-http}
+```{r open-http, eval=FALSE}
 gds <- gdsCloudOpen("https://private.example.com/data/file.gds")
 closefn.gds(gds)
 ```
@@ -130,7 +140,7 @@ gdsCloudConfigS3(
 
 Then open:
 
-```{r open-s3}
+```{r open-s3, eval=FALSE}
 gds <- gdsCloudOpen("s3://my-bucket/path/to/file.gds")
 # ... work with the file ...
 closefn.gds(gds)
@@ -152,7 +162,7 @@ gdsCloudConfigGCS(access_token = "your_oauth2_token")
 
 Then open:
 
-```{r open-gcs}
+```{r open-gcs, eval=FALSE}
 gds <- gdsCloudOpen("gs://my-bucket/path/to/file.gds")
 closefn.gds(gds)
 ```
@@ -184,7 +194,7 @@ gdsCloudConfigAzure(
 
 Then open:
 
-```{r open-azure}
+```{r open-azure, eval=FALSE}
 gds <- gdsCloudOpen("az://my-container/path/to/file.gds")
 closefn.gds(gds)
 ```
@@ -253,7 +263,7 @@ Since gdscloud works transparently through `openfn.gds()`, packages built on gds
 
 **Note:** SeqArray >= v1.53.1 is recommended for full cloud support. This version allows `seqParallel()` to automatically load cloud-related packages on worker processes, so parallel operations on cloud-hosted GDS files work seamlessly.
 
-```{r seqarray}
+```{r seqarray, eval=FALSE}
 library(SeqArray)
 library(gdscloud)
 
@@ -311,10 +321,10 @@ No code changes are needed in downstream packages; loading gdscloud is sufficien
 
 # Session Information
 
-```{r pkg, eval=TRUE, echo=FALSE}
+```{r pkg, echo=FALSE}
 library(gdscloud, quietly=TRUE)
 ```
 
-```{r session, eval=TRUE}
+```{r session}
 sessionInfo()
 ```

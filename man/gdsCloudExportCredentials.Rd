@@ -50,22 +50,18 @@ gdsCloudExportCredentials(cl)
     \code{\link{gdsCloudConfigAzure}}, \code{\link{gdsCloudOpen}}
 }
 \examples{
-\dontrun{
+# Serial processing (NULL): no-op, returns FALSE invisibly
+gdsCloudExportCredentials(NULL)
+
+\donttest{
 library(parallel)
-library(SeqArray)
 
 # configure credentials in the parent session
-gdsCloudConfigS3(aws_access_key_id="...", aws_secret_access_key="...")
+gdsCloudConfigS3(aws_access_key_id="AKID", aws_secret_access_key="secret")
 
 # create a PSOCK cluster and export credentials to the workers
 cl <- makeCluster(2L)
 gdsCloudExportCredentials(cl)
-
-# run a parallel analysis on a cloud-hosted GDS file
-seqParallel(cl, "s3://my-bucket/my-file.gds", FUN=function(f) {
-    seqSummary(f)
-})
-
 stopCluster(cl)
 }
 }

@@ -36,6 +36,8 @@ extern "C" {
 #define CLOUD_MAX_CACHE_SIZE    (64 * 1024 * 1024)
 /// Maximum URL length
 #define CLOUD_MAX_URL_LEN       4096
+/// Max endpoint length: scheme + host + path (path itself may be CLOUD_MAX_URL_LEN)
+#define CLOUD_MAX_ENDPOINT_LEN  (CLOUD_MAX_URL_LEN + 1024)
 /// Maximum credential string length
 #define CLOUD_MAX_CRED_LEN      1024
 /// Maximum error message length

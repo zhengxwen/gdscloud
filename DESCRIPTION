@@ -1,16 +1,17 @@
 Package: gdscloud
 Type: Package
 Title: Cloud Storage Access for GDS Files
-Version: 0.99.0
-Date: 2026-06-13
+Version: 0.99.2
+Date: 2026-06-15
 Authors@R: person("Xiuwen", "Zheng", role=c("aut", "cre"),
     email="zhengx@u.washington.edu")
-Description: Provides read-only access to GDS (Genomic Data Structure) files
-    stored on cloud storage services including Amazon S3, Google Cloud Storage
-    (GCS), and Azure Blob Storage, as well as any HTTP/HTTPS URL. Extends the
-    'gdsfmt' package to transparently open GDS files from cloud URLs (http://,
-    https://, s3://, gs://, az://) using efficient block caching and HTTP
-    Range requests via libcurl.
+Description: Provides read-only access to GDS (Genomic Data Structure)
+        files stored on cloud storage services including Amazon S3,
+        Google Cloud Storage (GCS), and Azure Blob Storage, as well as
+        any HTTP/HTTPS URL. Extends the 'gdsfmt' package to
+        transparently open GDS files from cloud URLs (http://,
+        https://, s3://, gs://, az://) using efficient block caching
+        and HTTP Range requests via libcurl.
 Depends: R (>= 4.5.0), gdsfmt (>= 1.48.1)
 Encoding: UTF-8
 LinkingTo: gdsfmt

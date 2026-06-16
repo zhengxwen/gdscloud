@@ -35,7 +35,7 @@ typedef struct S3BackendData {
 	char region[128];
 	char bucket[512];
 	char object_key[CLOUD_MAX_URL_LEN];
-	char endpoint[CLOUD_MAX_URL_LEN];  // resolved HTTPS endpoint
+	char endpoint[CLOUD_MAX_ENDPOINT_LEN];  // resolved HTTPS endpoint
 	CURL *curl;
 	char last_error[CLOUD_MAX_ERROR_LEN];
 } S3BackendData;
@@ -175,7 +175,7 @@ static void aws_sigv4_sign(S3BackendData *s3, const char *method,
 	hex_encode(cr_hash, 32, cr_hash_hex);
 
 	// credential scope
-	char scope[128];
+	char scope[192];
 	snprintf(scope, sizeof(scope), "%s/%s/s3/aws4_request",
 		datestamp, s3->region);
 
@@ -186,7 +186,7 @@ static void aws_sigv4_sign(S3BackendData *s3, const char *method,
 		amzdate, scope, cr_hash_hex);
 
 	// signing key
-	char key_buf[128];
+	char key_buf[CLOUD_MAX_CRED_LEN + 8];
 	snprintf(key_buf, sizeof(key_buf), "AWS4%s", s3->secret_key);
 	unsigned char k_date[32], k_region[32], k_service[32], k_signing[32];
 	hmac_sha256((unsigned char *)key_buf, strlen(key_buf),
@@ -236,7 +236,7 @@ static long long s3_read_range(void *backend_data, const char *url,
 		static const char *empty_hash =
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-		char auth_hdr[2048], date_hdr[128], token_hdr[1024];
+		char auth_hdr[2048], date_hdr[128], token_hdr[CLOUD_MAX_CRED_LEN + 64];
 		char range_canon[128];
 		snprintf(range_canon, sizeof(range_canon), "bytes=%lld-%lld",
 		    offset, offset + length - 1);
@@ -403,7 +403,7 @@ static long long s3_get_size(void *backend_data, const char *url)
 		static const char *empty_hash =
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-		char auth_hdr[2048], date_hdr[128], token_hdr[1024];
+		char auth_hdr[2048], date_hdr[128], token_hdr[CLOUD_MAX_CRED_LEN + 64];
 		aws_sigv4_sign(s3, "GET", s3->object_key, "",
 			empty_hash, range_canon, 0, 0,
 			auth_hdr, sizeof(auth_hdr),
@@ -530,7 +530,7 @@ S3BackendData *s3_backend_create(const char *s3_url,
 
 	// bucket
 	size_t bucket_len = (size_t)(slash - rest);
-	if (bucket_len >= sizeof(s3->bucket)) bucket_len = sizeof(s3->bucket) - 1;
+	if (bucket_len >= 256) bucket_len = 255;  // fits bucket_name[256] + host suffix
 	strncpy(s3->bucket, rest, bucket_len);
 	// Note: s3->bucket stores the S3 host for canonical headers
 	// We need a separate variable for the actual bucket name
@@ -552,7 +552,7 @@ S3BackendData *s3_backend_create(const char *s3_url,
 		strncpy(s3->region, "us-east-1", sizeof(s3->region) - 1);
 
 	// build virtual-hosted style endpoint
-	char bucket_name[512];
+	char bucket_name[256];
 	strncpy(bucket_name, rest, bucket_len);
 	bucket_name[bucket_len] = '\0';
 

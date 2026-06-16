@@ -27,7 +27,7 @@ typedef struct GCSBackendData {
 	char access_token[CLOUD_MAX_CRED_LEN];
 	char bucket[512];
 	char object_key[CLOUD_MAX_URL_LEN];
-	char endpoint[CLOUD_MAX_URL_LEN];
+	char endpoint[CLOUD_MAX_ENDPOINT_LEN];
 	CURL *curl;
 	char last_error[CLOUD_MAX_ERROR_LEN];
 } GCSBackendData;

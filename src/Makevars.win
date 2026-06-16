@@ -1,2 +1,6 @@
-PKG_CPPFLAGS = -I$(LIB_CURL)/include
-PKG_LIBS = -L$(LIB_CURL)/lib -lcurl -lssl -lcrypto -lz -lws2_32
+# libcurl and OpenSSL are supplied by the Rtools toolchain (R >= 4.5 uses
+# Rtools44+, whose UCRT environment ships libcurl and openssl). Locate them
+# with pkg-config. -DCURL_STATICLIB is required so the libcurl headers do not
+# assume a DLL import when linking the static library on Windows.
+PKG_CPPFLAGS = -DCURL_STATICLIB $(shell pkg-config --cflags libcurl openssl)
+PKG_LIBS = $(shell pkg-config --libs --static libcurl openssl) -lws2_32
