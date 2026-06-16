@@ -146,7 +146,7 @@ static int base64_encode(const unsigned char *input, size_t input_len,
 	bio = BIO_push(b64, bio);
 	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
 	BIO_write(bio, input, (int)input_len);
-	BIO_flush(bio);
+	(void)BIO_flush(bio);
 	BIO_get_mem_ptr(bio, &bptr);
 	if (bptr->length < out_size)
 	{
