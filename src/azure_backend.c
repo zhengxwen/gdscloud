@@ -281,6 +281,7 @@ static long long azure_read_range(void *backend_data, const char *url,
 	cb.capacity = length;
 
 	curl_easy_reset(az->curl);
+	curl_easy_setopt(az->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(az->curl, CURLOPT_URL, url_str);
 	curl_easy_setopt(az->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(az->curl, CURLOPT_WRITEFUNCTION, azure_curl_write_cb);
@@ -365,6 +366,7 @@ static long long azure_get_size(void *backend_data, const char *url)
 	long long file_size = -1;
 
 	curl_easy_reset(az->curl);
+	curl_easy_setopt(az->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(az->curl, CURLOPT_URL, url_str);
 	curl_easy_setopt(az->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(az->curl, CURLOPT_WRITEFUNCTION, azure_curl_write_cb);

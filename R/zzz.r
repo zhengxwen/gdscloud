@@ -23,18 +23,33 @@
 
 .onLoad <- function(libname, pkgname)
 {
-    # default settings
-    .gdscloud_env$cache_size_mb <- 64L
+    # default cache size (MB); overridable via the option
+    # 'gdscloud.cache_size_mb' or the environment variable
+    # GDSCLOUD_CACHE_SIZE_MB so it can persist across sessions
+    # (e.g. in .Rprofile / .Renviron)
+    raw <- getOption("gdscloud.cache_size_mb",
+        Sys.getenv("GDSCLOUD_CACHE_SIZE_MB", "64"))
+    sz <- if (is.numeric(raw)) raw
+        else if (grepl("^[0-9.]+$", raw)) as.numeric(raw) else NA_real_
+    .gdscloud_env$cache_size_mb <-
+        if (length(sz) == 1L && !is.na(sz) && sz > 0) sz else 64L
 
     # registry of URL-specific credential entries (longest-prefix match)
     .gdscloud_env$url_credentials <- list()
 
-    # register URL scheme handlers with gdsfmt
+    # register URL scheme handlers with gdsfmt. The registration hooks
+    # .gds_register_cloud_handler() / .gds_unregister_cloud_handler() are
+    # internal (non-exported) gdsfmt functions, so they are reached via
+    # asNamespace("gdsfmt"); this lets openfn.gds() dispatch cloud URLs to
+    # gdscloud without gdsfmt depending on this package.
     if (requireNamespace("gdsfmt", quietly=TRUE))
     {
-        # register handlers for s3://, gs://, az:// URLs
-        reg_fn <- get(".gds_register_cloud_handler",
-            envir=asNamespace("gdsfmt"), inherits=FALSE)
+        # register handlers for s3://, gs://, az:// URLs; access defensively
+        # so a gdsfmt without the hook cannot abort package loading
+        reg_fn <- tryCatch(
+            get(".gds_register_cloud_handler",
+                envir=asNamespace("gdsfmt"), inherits=FALSE),
+            error=function(e) NULL)
         if (is.function(reg_fn))
         {
             reg_fn("s3",    function(url, ...) .open_s3(url, ...), pkgname)

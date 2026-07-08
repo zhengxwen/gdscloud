@@ -48,7 +48,7 @@ gdsCloudConfigHTTP(bearer_token=NULL, url=NULL)
 # Set a global Bearer token
 gdsCloudConfigHTTP(bearer_token = "my-secret-token")
 
-\donttest{
+\dontrun{
 # Set a URL-specific token
 gdsCloudConfigHTTP(
     bearer_token = "token-for-private-server",

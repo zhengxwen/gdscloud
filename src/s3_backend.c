@@ -268,6 +268,7 @@ static long long s3_read_range(void *backend_data, const char *url,
 	cb.capacity = length;
 
 	curl_easy_reset(s3->curl);
+	curl_easy_setopt(s3->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(s3->curl, CURLOPT_URL, s3->endpoint);
 	curl_easy_setopt(s3->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(s3->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
@@ -439,6 +440,7 @@ static long long s3_get_size(void *backend_data, const char *url)
 	info.request_id[0] = '\0';
 
 	curl_easy_reset(s3->curl);
+	curl_easy_setopt(s3->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(s3->curl, CURLOPT_URL, s3->endpoint);
 	curl_easy_setopt(s3->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(s3->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);

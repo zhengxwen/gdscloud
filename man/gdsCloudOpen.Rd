@@ -45,7 +45,7 @@ gdsCloudConfigS3(
     region = "us-east-1"
 )
 
-\donttest{
+\dontrun{
 # Open from S3
 gds <- gdsCloudOpen("s3://my-bucket/data/example.gds")
 read.gdsn(index.gdsn(gds, "genotype"))

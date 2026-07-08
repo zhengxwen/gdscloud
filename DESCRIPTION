@@ -1,8 +1,7 @@
 Package: gdscloud
 Type: Package
 Title: Cloud Storage Access for GDS Files
-Version: 0.99.2
-Date: 2026-06-15
+Version: 0.99.3
 Authors@R: person("Xiuwen", "Zheng", role=c("aut", "cre"),
     email="zhengx@u.washington.edu")
 Description: Provides read-only access to GDS (Genomic Data Structure)
@@ -15,7 +14,8 @@ Description: Provides read-only access to GDS (Genomic Data Structure)
 Depends: R (>= 4.5.0), gdsfmt (>= 1.48.1)
 Encoding: UTF-8
 LinkingTo: gdsfmt
-Suggests: BiocParallel, BiocStyle, knitr, rmarkdown, testthat, SeqArray
+Suggests: BiocParallel, BiocStyle, keyring, knitr, rmarkdown, testthat,
+        SeqArray
 VignetteBuilder: knitr
 License: LGPL-3
 SystemRequirements: libcurl (>= 7.28.0), OpenSSL

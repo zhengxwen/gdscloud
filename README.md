@@ -92,9 +92,11 @@ gds <- gdsCloudOpen("https://example.com/path/to/file.gds")
 closefn.gds(gds)
 ```
 
-For authenticated endpoints, set a Bearer token via environment variable:
-```bash
-export GDSCLOUD_HTTP_TOKEN=your_token
+For authenticated endpoints, set a Bearer token via environment variable
+(in R, use `Sys.setenv()`, or add `GDSCLOUD_HTTP_TOKEN=your_token` to your
+`~/.Renviron` file to persist it across sessions):
+```r
+Sys.setenv(GDSCLOUD_HTTP_TOKEN = "your_token")
 ```
 
 Or configure in R:
@@ -107,13 +109,16 @@ gdsCloudConfigHTTP(bearer_token = "other_token", url = "https://private.example.
 ```
 
 ### AWS S3
-Set environment variables:
-```bash
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-export AWS_DEFAULT_REGION=us-east-1
-# Optional:
-export AWS_SESSION_TOKEN=your_token
+Set environment variables (via `Sys.setenv()` in R, or the corresponding
+`NAME=value` lines in `~/.Renviron`):
+```r
+Sys.setenv(
+    AWS_ACCESS_KEY_ID     = "your_key",
+    AWS_SECRET_ACCESS_KEY = "your_secret",
+    AWS_DEFAULT_REGION    = "us-east-1"
+)
+# Optional temporary-credential token:
+Sys.setenv(AWS_SESSION_TOKEN = "your_token")
 ```
 
 Or configure in R:
@@ -126,8 +131,9 @@ gdsCloudConfigS3(
 ```
 
 ### Google Cloud Storage
-```bash
-export GCS_ACCESS_TOKEN=your_token
+```r
+Sys.setenv(GCS_ACCESS_TOKEN = "your_token")
+# or add   GCS_ACCESS_TOKEN=your_token   to ~/.Renviron
 ```
 
 Or:
@@ -136,11 +142,14 @@ gdsCloudConfigGCS(access_token = "your_token")
 ```
 
 ### Azure Blob Storage
-```bash
-export AZURE_STORAGE_ACCOUNT=your_account
-export AZURE_STORAGE_KEY=your_key
-# Or use SAS token:
-export AZURE_STORAGE_SAS_TOKEN=your_sas
+```r
+Sys.setenv(
+    AZURE_STORAGE_ACCOUNT = "your_account",
+    AZURE_STORAGE_KEY     = "your_key"
+)
+# Or use a SAS token instead:
+Sys.setenv(AZURE_STORAGE_SAS_TOKEN = "your_sas")
+# or add the corresponding NAME=value lines to ~/.Renviron
 ```
 
 Or:

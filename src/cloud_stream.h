@@ -42,6 +42,10 @@ extern "C" {
 #define CLOUD_MAX_CRED_LEN      1024
 /// Maximum error message length
 #define CLOUD_MAX_ERROR_LEN     4096
+/// HTTP User-Agent sent with every cloud request (identifies this client
+/// rather than relying on the default libcurl user agent)
+#define GDSCLOUD_USER_AGENT \
+	"gdscloud (R package; +https://github.com/zhengxwen/gdscloud)"
 
 
 // =====================================================================

@@ -165,6 +165,7 @@ static long long gcs_read_range(void *backend_data, const char *url,
 	cb.capacity = length;
 
 	curl_easy_reset(gcs->curl);
+	curl_easy_setopt(gcs->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(gcs->curl, CURLOPT_URL, gcs->endpoint);
 	curl_easy_setopt(gcs->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(gcs->curl, CURLOPT_WRITEFUNCTION, gcs_curl_write_cb);
@@ -232,6 +233,7 @@ static long long gcs_get_size(void *backend_data, const char *url)
 	long long file_size = -1;
 
 	curl_easy_reset(gcs->curl);
+	curl_easy_setopt(gcs->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(gcs->curl, CURLOPT_URL, gcs->endpoint);
 	curl_easy_setopt(gcs->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(gcs->curl, CURLOPT_WRITEFUNCTION, gcs_curl_write_cb);

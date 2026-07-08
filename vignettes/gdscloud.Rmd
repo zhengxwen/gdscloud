@@ -19,9 +19,9 @@ knitr::opts_chunk$set(collapse=TRUE)
 
 # Introduction
 
-GDS (Genomic Data Structure) is a high-performance file format for storing and accessing large-scale genomic data, implemented by the [gdsfmt](https://bioconductor.org/packages/gdsfmt) package. It supports hierarchical data organization with efficient random access and data compression.
+GDS (Genomic Data Structure) is a high-performance file format for storing and accessing large-scale genomic data, implemented by the `r BiocStyle::Biocpkg("gdsfmt")` package. It supports hierarchical data organization with efficient random access and data compression.
 
-The **gdscloud** package extends gdsfmt to provide transparent read-only access to GDS files stored on cloud storage services. It uses HTTP Range requests via libcurl with an efficient LRU block cache to minimize network overhead.
+The `r BiocStyle::Biocpkg("gdscloud")` package extends `r BiocStyle::Biocpkg("gdsfmt")` to provide transparent read-only access to GDS files stored on cloud storage services. It uses HTTP Range requests via libcurl with an efficient LRU block cache to minimize network overhead.
 
 Supported backends:
 
@@ -68,17 +68,26 @@ summary(read.gdsn(index.gdsn(gds, "position")))
 closefn.gds(gds)
 ```
 
-Alternatively, use the explicit function:
-
-```{r explicit, eval=FALSE}
-gds <- gdsCloudOpen("s3://my-bucket/data/example.gds")
-closefn.gds(gds)
-```
+Alternatively, call `gdsCloudOpen()` directly with a cloud URL (see `?gdsCloudOpen`); the S3, GCS, Azure, and HTTP examples below use it explicitly.
 
 
 # Authentication
 
 Each cloud backend requires credentials. Credentials can be set either via environment variables (recommended for non-interactive use) or via R functions (convenient for interactive sessions). R-configured credentials take priority over environment variables.
+
+The secrets shown below are placeholders. Avoid typing real credentials directly into R scripts or on a shell command line, since both are saved to the R (`.Rhistory`) and shell histories. To keep secrets out of your history, store them in an OS credential store with the `r BiocStyle::CRANpkg("keyring")` package and retrieve them at run time:
+
+```{r keyring, eval=FALSE}
+# one-time, interactive: store the secret in the OS keychain
+keyring::key_set("gdscloud", "aws_secret_access_key")
+
+# later, in a script: retrieve without exposing it in history
+gdsCloudConfigS3(
+    aws_access_key_id     = keyring::key_get("gdscloud", "aws_access_key_id"),
+    aws_secret_access_key = keyring::key_get("gdscloud", "aws_secret_access_key"),
+    region                = "us-east-1"
+)
+```
 
 ## HTTP/HTTPS
 
@@ -259,7 +268,7 @@ Increasing cache size is beneficial when working with large files that require m
 
 # Integration with SeqArray
 
-Since gdscloud works transparently through `openfn.gds()`, packages built on gdsfmt, such as [SeqArray](https://bioconductor.org/packages/SeqArray), can open cloud-hosted files directly.
+Since gdscloud works transparently through `openfn.gds()`, packages built on gdsfmt, such as `r BiocStyle::Biocpkg("SeqArray")`, can open cloud-hosted files directly.
 
 **Note:** SeqArray >= v1.53.1 is recommended for full cloud support. This version allows `seqParallel()` to automatically load cloud-related packages on worker processes, so parallel operations on cloud-hosted GDS files work seamlessly.
 

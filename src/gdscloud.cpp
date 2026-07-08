@@ -151,8 +151,10 @@ static void set_pkgname_attr(SEXP file_obj)
 		{
 			if (strcmp(CHAR(STRING_ELT(names, i)), "filename") == 0)
 			{
+				SEXP val = PROTECT(Rf_mkString("gdscloud"));
 				Rf_setAttrib(VECTOR_ELT(file_obj, i),
-					Rf_install("pkgname"), Rf_mkString("gdscloud"));
+					Rf_install("pkgname"), val);
+				UNPROTECT(1);
 				break;
 			}
 		}
@@ -220,8 +222,9 @@ extern "C" SEXP gdscloud_open_http(SEXP url, SEXP auth_header,
 		}
 
 		g_open_streams.push_back(cs);
-		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		PROTECT(rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE));
 		set_pkgname_attr(rv_ans);
+		UNPROTECT(1);
 
 	COREARRAY_CATCH
 }
@@ -295,8 +298,9 @@ extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
 		}
 
 		g_open_streams.push_back(cs);
-		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		PROTECT(rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE));
 		set_pkgname_attr(rv_ans);
+		UNPROTECT(1);
 
 	COREARRAY_CATCH
 }
@@ -363,8 +367,9 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 		}
 
 		g_open_streams.push_back(cs);
-		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		PROTECT(rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE));
 		set_pkgname_attr(rv_ans);
+		UNPROTECT(1);
 
 	COREARRAY_CATCH
 }
@@ -436,8 +441,9 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 		}
 
 		g_open_streams.push_back(cs);
-		rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE);
+		PROTECT(rv_ans = GDS_R_MakeFileObj(file, c_url, TRUE));
 		set_pkgname_attr(rv_ans);
+		UNPROTECT(1);
 
 	COREARRAY_CATCH
 }

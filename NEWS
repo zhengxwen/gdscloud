@@ -1,3 +1,35 @@
+CHANGES IN VERSION 0.99.3
+-------------------------
+
+NEW FEATURES
+
+    o The default block-cache size can now be set persistently via the
+      `gdscloud.cache_size_mb` option or the `GDSCLOUD_CACHE_SIZE_MB`
+      environment variable, in addition to `gdsCloudCacheSize()`
+
+    o Cloud requests now send a descriptive HTTP User-Agent identifying
+      gdscloud instead of the default libcurl user agent
+
+    o Added a package-level manual page (`?gdscloud`)
+
+BUG FIXES
+
+    o Protected the GDS file object during attribute assignment in the C
+      code, addressing an rchk warning about a missing `PROTECT()`
+
+    o Cloud URL handler registration in `.onLoad()` is now performed
+      defensively, so the package can still load even if the gdsfmt
+      registration hook is unavailable
+
+USER-VISIBLE CHANGES
+
+    o `gdsCloudOpen()` now derives the set of accepted URL schemes from
+      `gdsCloudSchemes()`
+
+    o Added a keyring-based example in the vignette for keeping
+      credentials out of the R and shell history
+
+
 CHANGES IN VERSION 0.99.0
 -------------------------
 
