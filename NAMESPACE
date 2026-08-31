@@ -5,9 +5,11 @@ useDynLib(gdscloud,
     gdscloud_cache_clear, gdscloud_cache_info, gdscloud_list_streams)
 
 # gdsfmt is in Depends, ensuring its DLL is loaded before ours (LinkingTo).
-# No R-level imports are needed; we access gdsfmt internals via
-# asNamespace("gdsfmt") in .onLoad and call GDS C functions via LinkingTo.
-importFrom(gdsfmt, openfn.gds)
+# GDS C functions are called via LinkingTo; at the R level we only need
+# openfn.gds() and the cloud handler registry that .onLoad()/.onUnload() use
+# to make openfn.gds() dispatch cloud URLs to this package.
+importFrom(gdsfmt, openfn.gds,
+    gdsRegisterCloudHandler, gdsUnregisterCloudHandler)
 
 # Export the following names
 export(

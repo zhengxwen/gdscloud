@@ -1,3 +1,19 @@
+CHANGES IN VERSION 0.99.4
+-------------------------
+
+USER-VISIBLE CHANGES
+
+    o the cloud URL handlers are now registered with the exported
+      `gdsfmt::gdsRegisterCloudHandler()` / `gdsfmt::gdsUnregisterCloudHandler()`
+      instead of reaching into the gdsfmt namespace; gdsfmt (>= 1.49.7) is
+      required
+
+BUG FIXES
+
+    o `.onUnload()` now actually unregisters the cloud handlers from gdsfmt;
+      the hook it previously called did not exist in gdsfmt
+
+
 CHANGES IN VERSION 0.99.3
 -------------------------
 

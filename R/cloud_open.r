@@ -32,7 +32,7 @@ gdsCloudOpen <- function(url)
     {
         schemes_txt <- toString(paste0(supported_schemes, "://"))
         stop("Unsupported URL scheme: '", scheme, "'. ",
-             "Supported schemes: ", schemes_txt)
+            "Supported schemes: ", schemes_txt)
     }
 
     # dispatch to the appropriate backend

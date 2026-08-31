@@ -24,7 +24,7 @@ gdsCloudList()
 # List currently open cloud streams (empty if none open)
 gdsCloudList()
 
-\dontrun{
+\donttest{
 gds <- gdsCloudOpen("s3://gds-stat/download/hapmap/hapmap_r23a.gds")
 gdsCloudList()
 closefn.gds(gds)

@@ -83,7 +83,7 @@ gdsCloudConfigAzure(
     account_key = "base64encodedkey=="
 )
 
-\donttest{
+\dontrun{
 # URL-specific credentials: different keys for different buckets
 gdsCloudConfigS3(
     aws_access_key_id = "KEY_A",

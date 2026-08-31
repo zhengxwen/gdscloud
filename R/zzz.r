@@ -37,47 +37,20 @@
     # registry of URL-specific credential entries (longest-prefix match)
     .gdscloud_env$url_credentials <- list()
 
-    # register URL scheme handlers with gdsfmt. The registration hooks
-    # .gds_register_cloud_handler() / .gds_unregister_cloud_handler() are
-    # internal (non-exported) gdsfmt functions, so they are reached via
-    # asNamespace("gdsfmt"); this lets openfn.gds() dispatch cloud URLs to
-    # gdscloud without gdsfmt depending on this package.
-    if (requireNamespace("gdsfmt", quietly=TRUE))
-    {
-        # register handlers for s3://, gs://, az:// URLs; access defensively
-        # so a gdsfmt without the hook cannot abort package loading
-        reg_fn <- tryCatch(
-            get(".gds_register_cloud_handler",
-                envir=asNamespace("gdsfmt"), inherits=FALSE),
-            error=function(e) NULL)
-        if (is.function(reg_fn))
-        {
-            reg_fn("s3",    function(url, ...) .open_s3(url, ...), pkgname)
-            reg_fn("gs",    function(url, ...) .open_gcs(url, ...), pkgname)
-            reg_fn("az",    function(url, ...) .open_azure(url, ...), pkgname)
-            reg_fn("http",  function(url, ...) .open_http(url, ...), pkgname)
-            reg_fn("https", function(url, ...) .open_http(url, ...), pkgname)
-        }
-    }
+    # register the URL scheme handlers with gdsfmt, so that openfn.gds()
+    # dispatches cloud URLs to this package without gdsfmt needing a
+    # reverse dependency on gdscloud
+    gdsRegisterCloudHandler("s3",    .open_s3,    pkgname)
+    gdsRegisterCloudHandler("gs",    .open_gcs,   pkgname)
+    gdsRegisterCloudHandler("az",    .open_azure, pkgname)
+    gdsRegisterCloudHandler("http",  .open_http,  pkgname)
+    gdsRegisterCloudHandler("https", .open_http,  pkgname)
 }
+
 
 .onUnload <- function(libpath)
 {
-    # unregister cloud handlers from gdsfmt
-    if (requireNamespace("gdsfmt", quietly=TRUE))
-    {
-        unreg_fn <- tryCatch(
-            get(".gds_unregister_cloud_handler",
-                envir=asNamespace("gdsfmt"), inherits=FALSE),
-            error=function(e) NULL)
-        if (is.function(unreg_fn))
-        {
-            unreg_fn("s3")
-            unreg_fn("gs")
-            unreg_fn("az")
-            unreg_fn("http")
-            unreg_fn("https")
-        }
-    }
+    # unregister the cloud handlers from gdsfmt
+    gdsUnregisterCloudHandler(c("s3", "gs", "az", "http", "https"))
     library.dynam.unload("gdscloud", libpath)
 }

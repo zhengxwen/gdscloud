@@ -329,13 +329,13 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
 #
 .install_credentials <- function(creds)
 {
-    # ensure the package is attached on the worker
+    # ensure the package is loaded on the worker; this function carries the
+    # gdscloud namespace as its enclosing environment, so .gdscloud_env then
+    # resolves to the worker's own copy
     if (!requireNamespace("gdscloud", quietly=TRUE))
         return(invisible(FALSE))
-    env <- get(".gdscloud_env", envir=asNamespace("gdscloud"),
-        inherits=FALSE)
     for (nm in names(creds))
-        assign(nm, creds[[nm]], envir=env)
+        assign(nm, creds[[nm]], envir=.gdscloud_env)
     invisible(TRUE)
 }
 
