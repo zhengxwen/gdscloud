@@ -2,7 +2,9 @@
 // gdscloud: Cloud Storage Access for GDS Files
 //
 // s3_backend.c: Amazon S3 provider (AWS Signature Version 4) for the
-//     generic curl backend
+//     generic curl backend. A custom endpoint serves any S3-compatible
+//     service (MinIO, Ceph RGW, Cloudflare R2, Wasabi, Backblaze B2,
+//     DigitalOcean Spaces, ...).
 //
 // Copyright (C) 2026    Xiuwen Zheng
 //
@@ -29,8 +31,8 @@ typedef struct S3ProviderData {
 	char secret_key[CLOUD_MAX_CRED_LEN];
 	char session_token[CLOUD_MAX_CRED_LEN];
 	char region[128];
-	char host[1024];                         // Host header value
-	char canonical_uri[CLOUD_MAX_URL_LEN + 8]; // percent-encoded "/key"
+	char host[1024];                         // Host header value (host[:port])
+	char canonical_uri[CLOUD_MAX_URL_LEN + 1024]; // percent-encoded request path
 	char endpoint[CLOUD_MAX_ENDPOINT_LEN];   // full request URL
 } S3ProviderData;
 
@@ -225,13 +227,22 @@ const CurlProvider s3_provider = {
 
 
 // =====================================================================
-// Construction: s3://bucket/key -> https://bucket.s3.<region>.amazonaws.com/key
+// Construction
+//
+//   url:        s3://bucket/key
+//   endpoint:   optional "https://host[:port][/prefix]" of an
+//               S3-compatible service; empty -> the AWS regional endpoint
+//               https://bucket.s3.<region>.amazonaws.com
+//   path_style: 1 -> https://host/bucket/key, 0 -> https://bucket.host/key,
+//               -1 -> path-style for a custom endpoint, virtual-hosted
+//               style for AWS
+//
 // Returns NULL with a message in `err` on invalid input.
 // =====================================================================
 
 void *s3_provider_create(const char *url, const char *access_key,
 	const char *secret_key, const char *region, const char *session_token,
-	char *err, size_t err_size)
+	const char *endpoint, int path_style, char *err, size_t err_size)
 {
 	err[0] = '\0';
 	if (strncmp(url, "s3://", 5) != 0)
@@ -256,6 +267,27 @@ void *s3_provider_create(const char *url, const char *access_key,
 	memcpy(bucket, rest, bucket_len);
 	bucket[bucket_len] = '\0';
 
+	// where the service lives
+	char scheme[8], host[1024], base_path[CLOUD_MAX_URL_LEN];
+	int custom = (endpoint && endpoint[0]);
+	if (custom)
+	{
+		if (cloud_split_endpoint(endpoint, scheme, sizeof(scheme),
+			host, sizeof(host), base_path, sizeof(base_path)) != 0)
+		{
+			snprintf(err, err_size, "invalid S3 endpoint '%s' (expected "
+				"'https://host[:port][/prefix]')", endpoint);
+			return NULL;
+		}
+		if (path_style < 0) path_style = 1;
+	} else {
+		strcpy(scheme, "https");
+		snprintf(host, sizeof(host), "s3.%s.amazonaws.com",
+			(region && region[0]) ? region : "us-east-1");
+		base_path[0] = '\0';
+		if (path_style < 0) path_style = 0;
+	}
+
 	S3ProviderData *s3 = (S3ProviderData *)calloc(1, sizeof(S3ProviderData));
 	if (!s3) return NULL;
 
@@ -272,12 +304,17 @@ void *s3_provider_create(const char *url, const char *access_key,
 	// path and the SigV4 canonical URI
 	char encoded_key[CLOUD_MAX_URL_LEN];
 	cloud_url_encode_path(slash + 1, encoded_key, sizeof(encoded_key));
-	snprintf(s3->canonical_uri, sizeof(s3->canonical_uri), "/%s", encoded_key);
-
-	// virtual-hosted style endpoint
-	snprintf(s3->host, sizeof(s3->host), "%s.s3.%s.amazonaws.com",
-		bucket, s3->region);
-	snprintf(s3->endpoint, sizeof(s3->endpoint), "https://%s%s",
-		s3->host, s3->canonical_uri);
+	if (path_style)
+	{
+		snprintf(s3->host, sizeof(s3->host), "%s", host);
+		snprintf(s3->canonical_uri, sizeof(s3->canonical_uri), "%s/%s/%s",
+			base_path, bucket, encoded_key);
+	} else {
+		snprintf(s3->host, sizeof(s3->host), "%s.%s", bucket, host);
+		snprintf(s3->canonical_uri, sizeof(s3->canonical_uri), "%s/%s",
+			base_path, encoded_key);
+	}
+	snprintf(s3->endpoint, sizeof(s3->endpoint), "%s://%s%s",
+		scheme, s3->host, s3->canonical_uri);
 	return s3;
 }

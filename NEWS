@@ -3,6 +3,12 @@ CHANGES IN VERSION 0.99.5
 
 NEW FEATURES
 
+    o S3-compatible services: `gdsCloudConfigS3()` gains `endpoint=` and
+      `path_style=` (also read from AWS_ENDPOINT_URL_S3 / AWS_ENDPOINT_URL
+      and GDSCLOUD_S3_PATH_STYLE), so `s3://` URLs can point at MinIO,
+      Ceph RGW, Cloudflare R2, Wasabi, Backblaze B2, DigitalOcean Spaces
+      and other services implementing the S3 API
+
     o Cloud requests now have a connect timeout (30 s) and a low-speed
       timeout (60 s below 1 byte/s), so a stalled connection no longer
       blocks R indefinitely

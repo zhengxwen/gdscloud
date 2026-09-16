@@ -142,6 +142,36 @@ void cloud_utc_time(time_t t, struct tm *utc)
 }
 
 
+int cloud_split_endpoint(const char *endpoint,
+	char *scheme_out, size_t scheme_size, char *host_out, size_t host_size,
+	char *path_out, size_t path_size)
+{
+	const char *p = endpoint;
+	const char *scheme = "https";
+	if (strncasecmp(p, "https://", 8) == 0) { p += 8; scheme = "https"; }
+	else if (strncasecmp(p, "http://", 7) == 0) { p += 7; scheme = "http"; }
+	if (!*p || *p == '/' || *p == '?') return -1;
+
+	size_t host_len = strcspn(p, "/?");
+	if (host_len >= host_size || strlen(scheme) >= scheme_size) return -1;
+	memcpy(host_out, p, host_len);
+	host_out[host_len] = '\0';
+	strcpy(scheme_out, scheme);
+
+	path_out[0] = '\0';
+	p += host_len;
+	if (*p == '/')
+	{
+		size_t path_len = strcspn(p, "?");
+		while (path_len > 0 && p[path_len - 1] == '/') path_len--;
+		if (path_len >= path_size) return -1;
+		memcpy(path_out, p, path_len);
+		path_out[path_len] = '\0';
+	}
+	return 0;
+}
+
+
 // =====================================================================
 // libcurl callbacks
 // =====================================================================

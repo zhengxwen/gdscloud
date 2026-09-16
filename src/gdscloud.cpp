@@ -37,7 +37,7 @@ extern void *http_provider_create(const char *url, const char *auth,
 extern const CurlProvider s3_provider;
 extern void *s3_provider_create(const char *url, const char *access_key,
 	const char *secret_key, const char *region, const char *session_token,
-	char *err, size_t err_size);
+	const char *endpoint, int path_style, char *err, size_t err_size);
 
 extern const CurlProvider gcs_provider;
 extern void *gcs_provider_create(const char *url, const char *access_token,
@@ -134,6 +134,16 @@ static const char *sexp_str(SEXP x)
 	SEXP s = STRING_ELT(x, 0);
 	if (s == NA_STRING) return "";
 	return CHAR(s);
+}
+
+/// a three-state flag from a character SEXP: "TRUE" -> 1, "FALSE" -> 0,
+/// anything else (including "" and NA) -> -1 (automatic)
+static int sexp_flag(SEXP x)
+{
+	const char *s = sexp_str(x);
+	if (strcmp(s, "TRUE") == 0) return 1;
+	if (strcmp(s, "FALSE") == 0) return 0;
+	return -1;
 }
 
 /// set attr(file_obj$filename, "pkgname") <- "gdscloud"
@@ -237,16 +247,17 @@ extern "C" SEXP gdscloud_open_http(SEXP url, SEXP auth_header,
 // =====================================================================
 
 extern "C" SEXP gdscloud_open_s3(SEXP url, SEXP access_key, SEXP secret_key,
-	SEXP region, SEXP session_token, SEXP cache_size_mb)
+	SEXP region, SEXP session_token, SEXP endpoint, SEXP path_style,
+	SEXP cache_size_mb)
 {
 	const char *c_url = sexp_str(url);
 	COREARRAY_TRY
 		if (!c_url[0])
 			throw ErrGDSCloud("S3 URL is empty or missing");
-		char err[256];
+		char err[512];
 		void *pd = s3_provider_create(c_url, sexp_str(access_key),
 			sexp_str(secret_key), sexp_str(region), sexp_str(session_token),
-			err, sizeof(err));
+			sexp_str(endpoint), sexp_flag(path_style), err, sizeof(err));
 		if (!pd)
 			throw ErrGDSCloud("Invalid S3 URL '%s': %s", c_url, err);
 		rv_ans = open_cloud_gds(c_url, &s3_provider, pd,
@@ -335,9 +346,13 @@ extern "C" SEXP gdscloud_prepare_request(SEXP url, SEXP params, SEXP range,
 		else if (strncmp(c_url, "s3://", 5) == 0)
 		{
 			provider = &s3_provider;
+			int ps = -1;
+			if (strcmp(param(params, "path_style"), "TRUE") == 0) ps = 1;
+			else if (strcmp(param(params, "path_style"), "FALSE") == 0) ps = 0;
 			pd = s3_provider_create(c_url, param(params, "access_key"),
 				param(params, "secret_key"), param(params, "region"),
-				param(params, "session_token"), err, sizeof(err));
+				param(params, "session_token"), param(params, "endpoint"),
+				ps, err, sizeof(err));
 		}
 		else if (strncmp(c_url, "gs://", 5) == 0)
 		{

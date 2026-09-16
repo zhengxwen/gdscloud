@@ -146,8 +146,22 @@ gdsCloudConfigHTTP <- function(bearer_token=NULL, url=NULL)
 #
 gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
     aws_secret_access_key=NULL, region=NULL, session_token=NULL,
-    url=NULL)
+    endpoint=NULL, path_style=NULL, url=NULL)
 {
+    if (!is.null(endpoint))
+    {
+        if (!is.character(endpoint) || length(endpoint) != 1L ||
+            is.na(endpoint))
+        {
+            stop("'endpoint' must be a single character string, e.g. ",
+                "\"https://minio.example.org:9000\".", call.=FALSE)
+        }
+    }
+    if (!is.null(path_style))
+    {
+        if (!is.logical(path_style) || length(path_style) != 1L)
+            stop("'path_style' must be TRUE, FALSE or NA.", call.=FALSE)
+    }
     if (is.null(url))
     {
         if (!is.null(aws_access_key_id))
@@ -158,12 +172,18 @@ gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
             .gdscloud_env$aws_region <- region
         if (!is.null(session_token))
             .gdscloud_env$aws_session_token <- session_token
+        if (!is.null(endpoint))
+            .gdscloud_env$aws_endpoint <- endpoint
+        if (!is.null(path_style))
+            .gdscloud_env$aws_path_style <- path_style
     } else {
         .set_url_credentials(url, "s3", list(
             aws_access_key_id     = aws_access_key_id,
             aws_secret_access_key = aws_secret_access_key,
             aws_region            = region,
-            aws_session_token     = session_token
+            aws_session_token     = session_token,
+            aws_endpoint          = endpoint,
+            aws_path_style        = path_style
         ))
     }
     invisible()
@@ -253,8 +273,44 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
         session_token = .first_nonempty(
             m$aws_session_token,
             .gdscloud_env$aws_session_token,
-            Sys.getenv("AWS_SESSION_TOKEN", ""))
+            Sys.getenv("AWS_SESSION_TOKEN", "")),
+        # S3-compatible services: custom endpoint and addressing style
+        endpoint = .first_nonempty(
+            m$aws_endpoint,
+            .gdscloud_env$aws_endpoint,
+            Sys.getenv("AWS_ENDPOINT_URL_S3", ""),
+            Sys.getenv("AWS_ENDPOINT_URL", "")),
+        path_style = .first_nonna(
+            m$aws_path_style,
+            .gdscloud_env$aws_path_style,
+            .env_logical("GDSCLOUD_S3_PATH_STYLE"))
     )
+}
+
+
+#############################################################
+# Internal: first non-NA logical wins; NA when none is set
+#
+.first_nonna <- function(...)
+{
+    for (v in list(...))
+    {
+        if (!is.null(v) && length(v) == 1L && !is.na(v))
+            return(as.logical(v))
+    }
+    NA
+}
+
+#############################################################
+# Internal: a logical from an environment variable ("true"/"false",
+# "1"/"0", "yes"/"no"); NA when unset or unrecognized
+#
+.env_logical <- function(name)
+{
+    v <- tolower(Sys.getenv(name, ""))
+    if (v %in% c("true", "t", "1", "yes")) TRUE
+    else if (v %in% c("false", "f", "0", "no")) FALSE
+    else NA
 }
 
 
@@ -304,7 +360,7 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
     nms <- c(
         # S3
         "aws_access_key_id", "aws_secret_access_key", "aws_region",
-        "aws_session_token",
+        "aws_session_token", "aws_endpoint", "aws_path_style",
         # GCS
         "gcs_access_token",
         # Azure

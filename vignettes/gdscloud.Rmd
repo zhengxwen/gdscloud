@@ -26,7 +26,8 @@ The `r BiocStyle::Biocpkg("gdscloud")` package extends `r BiocStyle::Biocpkg("gd
 Supported backends:
 
 - **HTTP/HTTPS** — any `http://` or `https://` URL (public or authenticated)
-- **Amazon S3** — URLs of the form `s3://bucket/key`
+- **Amazon S3** — URLs of the form `s3://bucket/key`; S3-compatible services
+  (MinIO, Ceph RGW, Cloudflare R2, Wasabi, Backblaze B2, ...) via a custom endpoint
 - **Google Cloud Storage** — URLs of the form `gs://bucket/key`
 - **Azure Blob Storage** — URLs of the form `az://container/blob`
 
@@ -152,6 +153,41 @@ Then open:
 ```{r open-s3, eval=FALSE}
 gds <- gdsCloudOpen("s3://my-bucket/path/to/file.gds")
 # ... work with the file ...
+closefn.gds(gds)
+```
+
+### S3-compatible services
+
+Any service implementing the S3 API (MinIO, Ceph RGW, Cloudflare R2, Wasabi,
+Backblaze B2, DigitalOcean Spaces, ...) can be used by pointing the S3
+backend at its endpoint. Path-style addressing (`https://host/bucket/key`)
+is the default for a custom endpoint; `region` is still part of the
+signature and should be set to what the service documents:
+
+```{r auth-s3-compat}
+# a MinIO or Ceph instance on the local network
+gdsCloudConfigS3(
+    aws_access_key_id = "minioadmin",
+    aws_secret_access_key = "minioadmin",
+    endpoint = "http://minio.lab.internal:9000"
+)
+
+# Cloudflare R2, scoped to one bucket
+gdsCloudConfigS3(
+    aws_access_key_id = "R2_KEY",
+    aws_secret_access_key = "R2_SECRET",
+    region = "auto",
+    endpoint = "https://ACCOUNT_ID.r2.cloudflarestorage.com",
+    url = "s3://my-r2-bucket/"
+)
+```
+
+The endpoint can also be given through the `AWS_ENDPOINT_URL_S3` or
+`AWS_ENDPOINT_URL` environment variable, as understood by the AWS CLI and
+SDKs. Then open `s3://bucket/key` as usual:
+
+```{r open-s3-compat, eval=FALSE}
+gds <- gdsCloudOpen("s3://genomics/hapmap.gds")
 closefn.gds(gds)
 ```
 

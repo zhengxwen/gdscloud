@@ -6,13 +6,15 @@
     env <- get(".gdscloud_env", envir = asNamespace("gdscloud"),
         inherits = FALSE)
     nms <- c("aws_access_key_id", "aws_secret_access_key", "aws_region",
-        "aws_session_token", "azure_account_name", "azure_account_key",
+        "aws_session_token", "aws_endpoint", "aws_path_style",
+        "azure_account_name", "azure_account_key",
         "azure_sas_token", "gcs_access_token", "http_bearer_token")
     old <- mget(nms, envir = env, ifnotfound = list(NULL))
     on.exit(for (nm in nms) assign(nm, old[[nm]], envir = env), add = TRUE)
     # scrub environment variables that would otherwise leak in
     ev <- c("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION",
-        "AWS_SESSION_TOKEN", "AZURE_STORAGE_ACCOUNT", "AZURE_STORAGE_KEY",
+        "AWS_SESSION_TOKEN", "AWS_ENDPOINT_URL", "AWS_ENDPOINT_URL_S3",
+        "GDSCLOUD_S3_PATH_STYLE", "AZURE_STORAGE_ACCOUNT", "AZURE_STORAGE_KEY",
         "AZURE_STORAGE_SAS_TOKEN", "GCS_ACCESS_TOKEN", "GDSCLOUD_HTTP_TOKEN")
     withr::local_envvar(setNames(as.list(rep(NA_character_, length(ev))), ev))
     force(code)
@@ -140,5 +142,94 @@ test_that("HTTP requests carry the Bearer token only when configured", {
         gdsCloudConfigHTTP(bearer_token = "t0k")
         r <- gdscloud:::.prepare_request("https://example.org/x.gds")
         expect_equal(r$headers, "Authorization: Bearer t0k")
+    })
+})
+
+test_that("S3 custom endpoints: URL forms and the signed Host header", {
+    .with_creds({
+        cfg <- function(...) gdsCloudConfigS3(aws_access_key_id = "K",
+            aws_secret_access_key = "S", region = "us-east-1",
+            session_token = "", ...)
+        # path style is the default for a custom endpoint; port kept
+        cfg(endpoint = "http://minio.local:9000", path_style = NA)
+        r <- gdscloud:::.prepare_request("s3://bkt/dir/f.gds")
+        expect_equal(r$url, "http://minio.local:9000/bkt/dir/f.gds")
+        # scheme defaults to https; explicit virtual-hosted style
+        cfg(endpoint = "s3.wasabisys.com", path_style = FALSE)
+        r <- gdscloud:::.prepare_request("s3://bkt/f.gds")
+        expect_equal(r$url, "https://bkt.s3.wasabisys.com/f.gds")
+        # a path prefix on the endpoint, trailing slash and query ignored
+        cfg(endpoint = "https://gw.example.org/s3/?x=1", path_style = TRUE)
+        r <- gdscloud:::.prepare_request("s3://bkt/f.gds")
+        expect_equal(r$url, "https://gw.example.org/s3/bkt/f.gds")
+        # path style on Amazon S3 itself (bucket names with dots)
+        cfg(endpoint = "", path_style = TRUE)
+        r <- gdscloud:::.prepare_request("s3://my.bucket/f.gds")
+        expect_equal(r$url, "https://s3.us-east-1.amazonaws.com/my.bucket/f.gds")
+        # invalid endpoint
+        cfg(endpoint = "https:///nohost", path_style = NA)
+        expect_error(gdscloud:::.prepare_request("s3://bkt/f.gds"),
+            "invalid S3 endpoint")
+        expect_error(gdsCloudConfigS3(endpoint = 1), "endpoint")
+        expect_error(gdsCloudConfigS3(path_style = "yes"), "path_style")
+
+        # the signature covers host:port and the path-style URI
+        skip_if_not_installed("openssl")
+        cfg(endpoint = "http://minio.local:9000", path_style = NA)
+        r <- gdscloud:::.prepare_request("s3://bkt/dir/f.gds",
+            range = "bytes=0-9",
+            time = as.POSIXct("2013-05-24 00:00:00", tz = "UTC"))
+        auth <- grep("^Authorization:", r$headers, value = TRUE)
+        sha <- function(x) openssl::sha256(charToRaw(x))
+        hmac <- function(key, x) openssl::sha256(charToRaw(x), key = key)
+        hex <- function(x) paste(unclass(x), collapse = "")
+        empty <- paste0("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca4959",
+            "91b7852b855")
+        canonical <- paste("GET", "/bkt/dir/f.gds", "",
+            "host:minio.local:9000", "range:bytes=0-9",
+            paste0("x-amz-content-sha256:", empty),
+            "x-amz-date:20130524T000000Z", "",
+            "host;range;x-amz-content-sha256;x-amz-date", empty, sep = "\n")
+        sts <- paste("AWS4-HMAC-SHA256", "20130524T000000Z",
+            "20130524/us-east-1/s3/aws4_request", hex(sha(canonical)),
+            sep = "\n")
+        k <- hmac(charToRaw("AWS4S"), "20130524")
+        k <- hmac(k, "us-east-1"); k <- hmac(k, "s3"); k <- hmac(k, "aws4_request")
+        expect_equal(sub(".*Signature=", "", auth), hex(hmac(k, sts)))
+    })
+})
+
+test_that("S3 endpoint and path style resolve from env vars and URL entries", {
+    .with_creds({
+        env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+        old <- env$url_credentials
+        on.exit(env$url_credentials <- old, add = TRUE)
+        env$url_credentials <- list()
+        gdsCloudConfigS3(endpoint = "", path_style = NA)
+
+        withr::local_envvar(AWS_ENDPOINT_URL = "https://env.example.org",
+            GDSCLOUD_S3_PATH_STYLE = "false")
+        cred <- gdscloud:::.get_s3_credentials("s3://b/k")
+        expect_equal(cred$endpoint, "https://env.example.org")
+        expect_false(cred$path_style)
+
+        withr::local_envvar(AWS_ENDPOINT_URL_S3 = "https://s3env.example.org")
+        expect_equal(gdscloud:::.get_s3_credentials("s3://b/k")$endpoint,
+            "https://s3env.example.org")
+
+        gdsCloudConfigS3(endpoint = "https://global.example.org",
+            path_style = TRUE)
+        cred <- gdscloud:::.get_s3_credentials("s3://b/k")
+        expect_equal(cred$endpoint, "https://global.example.org")
+        expect_true(cred$path_style)
+
+        gdsCloudConfigS3(endpoint = "https://r2.example.org",
+            url = "s3://r2bucket/")
+        expect_equal(gdscloud:::.get_s3_credentials("s3://r2bucket/k")$endpoint,
+            "https://r2.example.org")
+        expect_equal(gdscloud:::.get_s3_credentials("s3://other/k")$endpoint,
+            "https://global.example.org")
+        # unset again (the entry is removed when all fields are NULL)
+        gdsCloudConfigS3(url = "s3://r2bucket/")
     })
 })

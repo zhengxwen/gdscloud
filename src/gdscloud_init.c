@@ -19,7 +19,7 @@
 
 // External declarations from gdscloud.c
 extern SEXP gdscloud_open_http(SEXP, SEXP, SEXP);
-extern SEXP gdscloud_open_s3(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+extern SEXP gdscloud_open_s3(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP gdscloud_open_gcs(SEXP, SEXP, SEXP);
 extern SEXP gdscloud_open_azure(SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP gdscloud_prepare_request(SEXP, SEXP, SEXP, SEXP);
@@ -32,7 +32,7 @@ extern SEXP gdscloud_list_streams(void);
 // .Call method table
 static const R_CallMethodDef CallEntries[] = {
 	{ "gdscloud_open_http",   (DL_FUNC) &gdscloud_open_http,   3 },
-	{ "gdscloud_open_s3",     (DL_FUNC) &gdscloud_open_s3,     6 },
+	{ "gdscloud_open_s3",     (DL_FUNC) &gdscloud_open_s3,     8 },
 	{ "gdscloud_open_gcs",    (DL_FUNC) &gdscloud_open_gcs,    3 },
 	{ "gdscloud_open_azure",  (DL_FUNC) &gdscloud_open_azure,  5 },
 	{ "gdscloud_prepare_request", (DL_FUNC) &gdscloud_prepare_request, 4 },

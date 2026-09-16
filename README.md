@@ -6,7 +6,8 @@ The `gdscloud` package extends `gdsfmt` to provide transparent read-only access
 to GDS files stored on cloud storage services or any HTTP/HTTPS URL:
 
 - **HTTP/HTTPS** (`http://` or `https://` URLs)
-- **Amazon S3** (`s3://bucket/key`)
+- **Amazon S3** (`s3://bucket/key`), and S3-compatible services such as
+  MinIO, Ceph, Cloudflare R2, Wasabi or Backblaze B2 via a custom endpoint
 - **Google Cloud Storage** (`gs://bucket/key`)
 - **Azure Blob Storage** (`az://container/blob`)
 
@@ -129,6 +130,18 @@ gdsCloudConfigS3(
     region = "us-east-1"
 )
 ```
+
+For an S3-compatible service, add its endpoint (path-style addressing is
+used by default for custom endpoints):
+```r
+gdsCloudConfigS3(
+    aws_access_key_id = "minioadmin",
+    aws_secret_access_key = "minioadmin",
+    endpoint = "http://minio.lab.internal:9000"
+)
+gds <- gdsCloudOpen("s3://genomics/hapmap.gds")
+```
+The endpoint can also come from the `AWS_ENDPOINT_URL` environment variable.
 
 ### Google Cloud Storage
 ```r

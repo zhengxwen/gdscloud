@@ -136,6 +136,15 @@ long cloud_base64_decode(const char *in, unsigned char *out, size_t out_size);
 /// Broken-down UTC time for `t` (thread-safe gmtime)
 void cloud_utc_time(time_t t, struct tm *utc);
 
+/// Split an endpoint such as "https://host:9000/prefix/" into its parts:
+/// `scheme_out` gets "http" or "https" (https when absent), `host_out`
+/// gets "host[:port]" (as needed for a Host header) and `path_out` the
+/// path without query string or trailing slash ("" when none). Returns
+/// 0 on success, -1 when there is no host or a buffer is too small.
+int cloud_split_endpoint(const char *endpoint,
+	char *scheme_out, size_t scheme_size, char *host_out, size_t host_size,
+	char *path_out, size_t path_size);
+
 
 #ifdef __cplusplus
 }

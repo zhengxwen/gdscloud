@@ -76,3 +76,32 @@ test_that("transient 503 responses are retried with back-off", {
     expect_true(any(grepl("SlowDown", errs)))
     expect_equal(gdsCloudCacheInfo(verbose = FALSE)$retries, before)
 })
+
+test_that("an S3-compatible endpoint round-trips through the S3 backend", {
+    # The local server is not an S3 implementation, but with a custom
+    # endpoint and path-style addressing "s3://data/test.gds" maps to
+    # <endpoint>/data/test.gds, so the signed request must succeed and the
+    # data round-trip through the S3 code path (as for MinIO, Ceph, R2...).
+    env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+    nms <- c("aws_access_key_id", "aws_secret_access_key", "aws_endpoint",
+        "aws_path_style")
+    old <- mget(nms, envir = env, ifnotfound = list(NULL))
+    on.exit(for (nm in nms) assign(nm, old[[nm]], envir = env), add = TRUE)
+
+    gdsCloudConfigS3(aws_access_key_id = "AKIAEXAMPLE",
+        aws_secret_access_key = "secret", endpoint = srv$url)
+    gds <- gdsCloudOpen("s3://data/test.gds")
+    expect_identical(read.gdsn(index.gdsn(gds, "geno")), ref$geno)
+    expect_equal(gdsCloudList()$url, "s3://data/test.gds")
+    closefn.gds(gds)
+
+    # anonymous access to a public endpoint
+    gdsCloudConfigS3(aws_access_key_id = "", aws_secret_access_key = "",
+        endpoint = srv$url)
+    gds <- gdsCloudOpen("s3://data/test.gds")
+    expect_identical(read.gdsn(index.gdsn(gds, "text")), ref$text)
+    closefn.gds(gds)
+
+    # the error path keeps the S3 prefix and the server's body
+    expect_error(gdsCloudOpen("s3://data/missing.gds"), "S3: HTTP 404")
+})

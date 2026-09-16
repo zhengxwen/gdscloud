@@ -56,7 +56,7 @@ gdsCloudSchemes <- function()
     c(
         http  = "HTTP",
         https = "HTTPS",
-        s3    = "Amazon S3",
+        s3    = "Amazon S3 (and S3-compatible services)",
         gs    = "Google Cloud Storage",
         az    = "Azure Blob Storage"
     )
@@ -165,7 +165,7 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
     # Call C function with credentials and cache size
     .Call(gdscloud_open_s3, url,
         cred$access_key, cred$secret_key, cred$region, cred$session_token,
-        cache_mb)
+        cred$endpoint, .flag_str(cred$path_style), cache_mb)
 }
 
 
@@ -209,10 +209,23 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
             list(auth = if (nzchar(cred$bearer_token))
                 paste("Bearer", cred$bearer_token) else "")
         },
-        s3 = .get_s3_credentials(url),
+        s3 = {
+            cred <- .get_s3_credentials(url)
+            cred$path_style <- .flag_str(cred$path_style)
+            cred
+        },
         gs = .get_gcs_credentials(url),
         az = .get_azure_credentials(url),
         stop("Unsupported URL scheme: '", scheme, "'"))
     .Call(gdscloud_prepare_request, url, params, range,
         as.numeric(as.POSIXct(time, tz="UTC")))
+}
+
+
+#############################################################
+# Internal: a three-state logical as "TRUE" / "FALSE" / "" for .Call
+#
+.flag_str <- function(x)
+{
+    if (isTRUE(x)) "TRUE" else if (isFALSE(x)) "FALSE" else ""
 }
