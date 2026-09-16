@@ -10,6 +10,11 @@ BUG FIXES
       block. The transfer is aborted as soon as the mismatch is detected,
       so the whole file is not downloaded.
 
+    o The Azure Shared Key is now base64-decoded once, into a bounded
+      buffer, when the file is opened; an invalid or over-long key gives an
+      immediate error instead of a stack buffer overflow (over-long input)
+      or an HMAC over garbage (decoding failure was ignored).
+
 
 CHANGES IN VERSION 0.99.4
 -------------------------

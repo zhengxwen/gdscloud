@@ -31,7 +31,8 @@
 
 typedef struct AzureBackendData {
 	char account_name[256];
-	char account_key[CLOUD_MAX_CRED_LEN];  // base64-encoded
+	unsigned char account_key[512];        // decoded Shared Key bytes
+	size_t account_key_len;                // 0 when no key is configured
 	char sas_token[CLOUD_MAX_CRED_LEN];
 	char container[512];
 	char blob_name[CLOUD_MAX_URL_LEN];
@@ -122,18 +123,28 @@ static size_t azure_getsize_header_cb(char *buffer, size_t size, size_t nitems,
 // Helper: Base64 decode/encode (for Azure Shared Key)
 // =====================================================================
 
-static int base64_decode(const char *input, unsigned char *output,
-	size_t *out_len)
+/// Decode `input` into `output` (at most `out_size` bytes). Returns the
+/// number of decoded bytes, or -1 if the input is not valid base64 or
+/// does not fit into `output`.
+static long base64_decode(const char *input, unsigned char *output,
+	size_t out_size)
 {
 	BIO *bio, *b64;
 	size_t input_len = strlen(input);
+	if (input_len == 0 || out_size == 0) return -1;
 	b64 = BIO_new(BIO_f_base64());
 	bio = BIO_new_mem_buf(input, (int)input_len);
 	bio = BIO_push(b64, bio);
 	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-	*out_len = BIO_read(bio, output, (int)input_len);
+	int n = BIO_read(bio, output, (int)out_size);
+	if (n > 0 && (size_t)n == out_size)
+	{
+		// anything left over means the input is longer than the buffer
+		unsigned char extra;
+		if (BIO_read(bio, &extra, 1) > 0) n = -1;
+	}
 	BIO_free_all(bio);
-	return (*out_len > 0) ? 0 : -1;
+	return (n > 0) ? n : -1;
 }
 
 static int base64_encode(const unsigned char *input, size_t input_len,
@@ -205,14 +216,9 @@ static void azure_sign_request(AzureBackendData *az, const char *method,
 		date_str,
 		az->account_name, resource_path);
 
-	// decode account key
-	unsigned char key_bytes[256];
-	size_t key_len = 0;
-	base64_decode(az->account_key, key_bytes, &key_len);
-
-	// HMAC-SHA256
+	// HMAC-SHA256 with the decoded account key
 	unsigned char sig[32];
-	hmac_sha256(key_bytes, key_len,
+	hmac_sha256(az->account_key, az->account_key_len,
 		(unsigned char *)string_to_sign, strlen(string_to_sign), sig);
 	unsigned int sig_len = 32;
 
@@ -258,7 +264,7 @@ static long long azure_read_range(void *backend_data, const char *url,
 		snprintf(range_hdr, sizeof(range_hdr), "Range: %s", range_str);
 		headers = curl_slist_append(headers, range_hdr);
 	}
-	else if (az->account_key[0])
+	else if (az->account_key_len > 0)
 	{
 		char auth_hdr[2048], date_hdr[128];
 		char resource_path[CLOUD_MAX_ENDPOINT_LEN];
@@ -351,7 +357,7 @@ static long long azure_get_size(void *backend_data, const char *url)
 		snprintf(url_str, sizeof(url_str), "%s%c%s",
 			az->endpoint, sep, az->sas_token);
 	}
-	else if (az->account_key[0])
+	else if (az->account_key_len > 0)
 	{
 		char auth_hdr[2048], date_hdr[128];
 		char resource_path[CLOUD_MAX_ENDPOINT_LEN];
@@ -434,11 +440,13 @@ static void azure_close(void *backend_data)
 // Azure backend: create
 // =====================================================================
 
-/// Parse az://account/container/blob and resolve endpoint
+/// Parse az://container/blob and resolve endpoint; on failure returns NULL
+/// and, when the cause is a bad credential, a message in `err`
 AzureBackendData *azure_backend_create(const char *az_url,
 	const char *account_name, const char *account_key,
-	const char *sas_token)
+	const char *sas_token, char *err, size_t err_size)
 {
+	if (err && err_size) err[0] = '\0';
 	// az://container/blob  (account from param or env)
 	if (strncmp(az_url, "az://", 5) != 0) return NULL;
 	const char *rest = az_url + 5;
@@ -461,7 +469,23 @@ AzureBackendData *azure_backend_create(const char *az_url,
 	if (account_name && account_name[0])
 		strncpy(az->account_name, account_name, sizeof(az->account_name) - 1);
 	if (account_key && account_key[0])
-		strncpy(az->account_key, account_key, sizeof(az->account_key) - 1);
+	{
+		// decode the base64 Shared Key once; real keys are 64 bytes
+		long n = base64_decode(account_key, az->account_key,
+			sizeof(az->account_key));
+		if (n <= 0)
+		{
+			if (err && err_size)
+			{
+				snprintf(err, err_size, "the Azure storage account key is "
+					"not valid base64 (or is too long)");
+			}
+			memset(az->account_key, 0, sizeof(az->account_key));
+			free(az);
+			return NULL;
+		}
+		az->account_key_len = (size_t)n;
+	}
 	if (sas_token && sas_token[0])
 		strncpy(az->sas_token, sas_token, sizeof(az->sas_token) - 1);
 

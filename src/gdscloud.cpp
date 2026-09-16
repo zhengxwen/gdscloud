@@ -47,7 +47,7 @@ extern CloudBackend gcs_backend_vtable;
 typedef struct AzureBackendData AzureBackendData;
 extern AzureBackendData *azure_backend_create(const char *az_url,
 	const char *account_name, const char *account_key,
-	const char *sas_token);
+	const char *sas_token, char *err, size_t err_size);
 extern CloudBackend azure_backend_vtable;
 
 } // extern "C"
@@ -400,9 +400,15 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 		if (!c_acc || !c_acc[0])
 			throw ErrGDSCloud("Azure account name is required for '%s'", c_url);
 
-		AzureBackendData *az = azure_backend_create(c_url, c_acc, c_key, c_sas);
+		char err[256];
+		AzureBackendData *az = azure_backend_create(c_url, c_acc, c_key, c_sas,
+			err, sizeof(err));
 		if (!az)
+		{
+			if (err[0])
+				throw ErrGDSCloud("Cannot open '%s': %s", c_url, err);
 			throw ErrGDSCloud("Failed to create Azure backend for '%s'", c_url);
+		}
 
 		long long max_cache = (long long)(c_cache * 1024 * 1024);
 		CloudStream *cs = cloud_stream_create(c_url,
