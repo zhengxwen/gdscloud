@@ -31,6 +31,12 @@ gdsCloudExportCredentials(cl)
     and configuring credentials in the parent session, and before
     invoking \code{\link[SeqArray]{seqParallel}}.
 
+    Tokens given as provider functions (see
+    \code{\link{gdsCloudConfigS3}}) are serialized to the workers
+    together with their enclosing environments, and are called on the
+    worker when it opens a file; the packages and login state they rely
+    on must therefore be available there as well.
+
     On Unix, when \code{cl} is \code{TRUE} or a numeric value,
     \code{seqParallel()} uses forking and child processes inherit the
     parent's in-memory credentials automatically, so this function is a

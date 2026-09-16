@@ -12,7 +12,10 @@ gdsCloudConfigHTTP(bearer_token=NULL, url=NULL)
 }
 \arguments{
     \item{bearer_token}{a Bearer token string for HTTP Authorization
-        header (e.g. an OAuth2 access token or API token)}
+        header (e.g. an OAuth2 access token or API token), or a function
+        with no arguments returning it; a function is called each time a
+        file is opened, so expiring tokens can be refreshed (see
+        \code{\link{gdsCloudConfigS3}} for details)}
     \item{url}{optional URL prefix (e.g.
         \code{"https://private.example.com/"}) to associate the given
         credentials with. When \code{NULL} (the default) the credentials
@@ -49,6 +52,9 @@ gdsCloudConfigHTTP(bearer_token=NULL, url=NULL)
 gdsCloudConfigHTTP(bearer_token = "my-secret-token")
 
 \dontrun{
+# A token provider function, called whenever a file is opened
+gdsCloudConfigHTTP(bearer_token = function() my_oauth_client$get_token())
+
 # Set a URL-specific token
 gdsCloudConfigHTTP(
     bearer_token = "token-for-private-server",

@@ -264,6 +264,34 @@ gds <- gdsCloudOpen("az://my-container/path/to/file.gds")
 closefn.gds(gds)
 ```
 
+## Short-lived tokens: token provider functions
+
+Google OAuth2 access tokens and Microsoft Entra ID tokens expire after
+about an hour. Instead of a fixed string, the token arguments
+(`access_token` for GCS and Azure, `bearer_token` for HTTP) accept a
+function that returns the token; it is called each time a file is opened,
+so a fresh token is fetched automatically. This is also the way to reuse
+the login machinery of dedicated packages:
+
+```{r auth-provider, eval=FALSE}
+# Google Cloud Storage via gargle, or via the gcloud CLI
+gdsCloudConfigGCS(access_token = function()
+    gargle::token_fetch(scopes = "https://www.googleapis.com/auth/devstorage.read_only")$credentials$access_token)
+gdsCloudConfigGCS(access_token = function()
+    system2("gcloud", c("auth", "print-access-token"), stdout = TRUE))
+
+# Azure via AzureAuth
+gdsCloudConfigAzure(account_name = "mystorageaccount", access_token = function()
+    AzureAuth::get_azure_token("https://storage.azure.com/",
+        tenant = "mytenant", app = "myapp")$credentials$access_token)
+```
+
+A function returning `NULL` or `""` means no token is available and the
+next fallback is used. Provider functions are exported to parallel workers
+by `gdsCloudExportCredentials()` like any other credential. Keys (AWS
+access keys, Azure account keys, SAS tokens) are long-lived and are always
+given as strings.
+
 ## URL-specific credentials
 
 Sometimes different URLs need different credentials — for example, two S3 buckets owned by different accounts, or a mix of public and private resources. Each `gdsCloudConfig*()` function accepts an optional `url` argument that associates the supplied credentials with a URL prefix rather than the global defaults:

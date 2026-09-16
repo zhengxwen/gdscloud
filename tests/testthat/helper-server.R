@@ -7,6 +7,7 @@
 #   /norange/<f>       ignores Range: always 200 with the whole file
 #   /badrange/<f>      206 whose Content-Range start is always 0
 #   /flaky/<f>         503 on two out of every three requests, else /data
+#   /auth/<f>          requires "Authorization: Bearer secret-token"
 
 .test_server_app <- function(dir)
 {
@@ -56,6 +57,13 @@
         mode <- parts[1L]; fname <- parts[2L]
         if (mode %in% c("data", "norange", "badrange"))
             serve(req, fname, mode)
+        else if (mode == "auth")
+        {
+            if (identical(req$HTTP_AUTHORIZATION, "Bearer secret-token"))
+                serve(req, fname, "data")
+            else
+                resp(401L, "{\"error\":\"unauthorized\"}")
+        }
         else if (mode == "flaky")
         {
             if (counter %% 3L != 0L)

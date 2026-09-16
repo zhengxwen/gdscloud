@@ -109,6 +109,12 @@ gdsCloudConfigHTTP(bearer_token = "other_token", url = "https://private.example.
 # only http:// and https:// prefixes are accepted for `url`
 ```
 
+Token arguments (`access_token` for GCS and Azure, `bearer_token` for HTTP)
+can also be a function returning the token; it is called each time a file
+is opened, so expiring tokens are refreshed automatically (e.g.
+`gdsCloudConfigGCS(access_token = function()
+system2("gcloud", c("auth", "print-access-token"), stdout = TRUE))`).
+
 ### AWS S3
 Set environment variables (via `Sys.setenv()` in R, or the corresponding
 `NAME=value` lines in `~/.Renviron`):

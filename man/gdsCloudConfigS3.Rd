@@ -46,7 +46,9 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
         OAuth2 access token for the storage resource (Microsoft Entra ID,
         e.g. from
         \code{az account get-access-token --resource https://storage.azure.com/}
-        or a managed identity); used when no SAS token is set}
+        or a managed identity); used when no SAS token is set. Either may
+        be a function returning the token, see \sQuote{Token provider
+        functions} below}
     \item{account_name}{Azure storage account name}
     \item{account_key}{Azure storage account key}
     \item{sas_token}{Azure SAS (Shared Access Signature) token}
@@ -96,6 +98,26 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
     \code{"/"} if missing, so \code{"s3://bucket"} and
     \code{"s3://bucket/"} behave identically.
 
+    \subsection{Token provider functions}{
+    The token arguments, \code{access_token} of \code{gdsCloudConfigGCS}
+    and \code{gdsCloudConfigAzure} and \code{bearer_token} of
+    \code{\link{gdsCloudConfigHTTP}}, may also be a function with no
+    arguments that returns the token as a single character string. The
+    function is called each time a file is opened, so tokens that expire
+    (Google OAuth2 and Microsoft Entra ID access tokens last about an
+    hour) are refreshed without reconfiguring. Returning \code{NULL} or
+    \code{""} means no token is available and the next fallback (global
+    setting, environment variable) is tried. A function is only called
+    when the file is opened; requests made later on the same open file
+    keep using the token obtained then.
+
+    This is the intended way to plug in the login machinery of dedicated
+    packages, e.g. \pkg{gargle} or \pkg{googleAuthR} for Google and
+    \pkg{AzureAuth} for Azure; see the examples. Keys (AWS access keys,
+    the Azure account key, SAS tokens) are long-lived and must be given
+    as strings.
+    }
+
     \subsection{Azure authentication}{
     When several Azure credentials are configured, a SAS token is used
     first, then an OAuth2 \code{access_token}, then the Shared Key
@@ -123,7 +145,8 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
     None (invisible).
 }
 \seealso{
-    \code{\link{gdsCloudOpen}}
+    \code{\link{gdsCloudOpen}}, \code{\link{gdsCloudConfigHTTP}},
+    \code{\link{gdsCloudExportCredentials}}
 }
 \examples{
 # AWS S3
@@ -143,6 +166,20 @@ gdsCloudConfigAzure(
 )
 
 \dontrun{
+# Token provider functions: called every time a file is opened
+# Google Cloud Storage via gargle (user or service-account login)
+gdsCloudConfigGCS(access_token = function()
+    gargle::token_fetch(scopes = "https://www.googleapis.com/auth/devstorage.read_only")$credentials$access_token)
+
+# ... or via the gcloud CLI
+gdsCloudConfigGCS(access_token = function()
+    system2("gcloud", c("auth", "print-access-token"), stdout = TRUE))
+
+# Azure via AzureAuth (Entra ID)
+gdsCloudConfigAzure(account_name = "mystorageaccount", access_token = function()
+    AzureAuth::get_azure_token("https://storage.azure.com/",
+        tenant = "mytenant", app = "myapp")$credentials$access_token)
+
 # URL-specific credentials: different keys for different buckets
 gdsCloudConfigS3(
     aws_access_key_id = "KEY_A",

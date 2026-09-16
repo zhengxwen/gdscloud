@@ -278,3 +278,114 @@ test_that("gdsCloudExportCredentials forwards url_credentials to workers", {
         expect_equal(got$scheme, "s3")
     })
 })
+
+
+# --------------------------------------------------------------------------
+# Credential provider functions
+# --------------------------------------------------------------------------
+
+test_that("token arguments accept functions, called when resolving", {
+    .with_clean_url_creds({
+        withr::local_envvar(GCS_ACCESS_TOKEN = NA, GDSCLOUD_HTTP_TOKEN = NA,
+            AWS_ACCESS_KEY_ID = NA, AWS_SECRET_ACCESS_KEY = NA,
+            AWS_SESSION_TOKEN = NA)
+        env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+        old <- mget(c("gcs_access_token", "http_bearer_token",
+            "aws_access_key_id", "aws_secret_access_key", "aws_session_token"),
+            envir = env, ifnotfound = list(NULL))
+        on.exit(for (nm in names(old)) assign(nm, old[[nm]], envir = env),
+            add = TRUE)
+
+        calls <- 0L
+        gdsCloudConfigGCS(access_token = function() {
+            calls <<- calls + 1L
+            paste0("tok", calls)
+        })
+        # not called at configuration time, once per resolution
+        expect_equal(calls, 0L)
+        expect_equal(gdscloud:::.get_gcs_credentials("gs://b/k")$access_token,
+            "tok1")
+        expect_equal(gdscloud:::.get_gcs_credentials("gs://b/k")$access_token,
+            "tok2")
+        expect_equal(calls, 2L)
+
+        # NULL / "" from the function falls through to the next layer
+        gdsCloudConfigGCS(access_token = "GLOBAL")
+        gdsCloudConfigGCS(access_token = function() NULL, url = "gs://b/")
+        expect_equal(gdscloud:::.get_gcs_credentials("gs://b/k")$access_token,
+            "GLOBAL")
+        gdsCloudConfigGCS(access_token = function() "", url = "gs://b/")
+        expect_equal(gdscloud:::.get_gcs_credentials("gs://b/k")$access_token,
+            "GLOBAL")
+        gdsCloudConfigGCS(access_token = function() "URL", url = "gs://b/")
+        expect_equal(gdscloud:::.get_gcs_credentials("gs://b/k")$access_token,
+            "URL")
+
+        # the other token arguments
+        gdsCloudConfigHTTP(bearer_token = function() "bt")
+        expect_equal(gdscloud:::.get_http_credentials("https://x/y")$bearer_token,
+            "bt")
+        old_az <- mget(c("azure_access_token"), envir = env,
+            ifnotfound = list(NULL))
+        gdsCloudConfigAzure(access_token = function() "az")
+        expect_equal(gdscloud:::.get_azure_credentials("az://c/b")$access_token,
+            "az")
+        assign("azure_access_token", old_az[[1L]], envir = env)
+
+        # a function must return a single string (drop the URL entry first,
+        # otherwise it would win before the global function is called)
+        gdsCloudConfigGCS(url = "gs://b/")
+        gdsCloudConfigGCS(access_token = function() 42)
+        expect_error(gdscloud:::.get_gcs_credentials("gs://b/k"),
+            "single character string")
+        gdsCloudConfigGCS(access_token = function() c("a", "b"))
+        expect_error(gdscloud:::.get_gcs_credentials("gs://b/k"),
+            "single character string")
+        # errors inside the provider propagate
+        gdsCloudConfigGCS(access_token = function() stop("login failed"))
+        expect_error(gdscloud:::.get_gcs_credentials("gs://b/k"), "login failed")
+
+        # argument validation at configuration time: tokens may be
+        # functions, keys must be strings
+        expect_error(gdsCloudConfigGCS(access_token = 1), "function")
+        expect_error(gdsCloudConfigHTTP(bearer_token = list()), "function")
+        expect_error(gdsCloudConfigAzure(access_token = NA_character_),
+            "function")
+        expect_error(gdsCloudConfigS3(aws_access_key_id = function() "AK"),
+            "single character string")
+        expect_error(gdsCloudConfigS3(aws_secret_access_key = c("a", "b")),
+            "single character string")
+        expect_error(gdsCloudConfigS3(session_token = function() "t"),
+            "single character string")
+        expect_error(gdsCloudConfigAzure(account_key = function() "k"),
+            "single character string")
+        expect_error(gdsCloudConfigAzure(sas_token = function() "s"),
+            "single character string")
+        expect_error(gdsCloudConfigAzure(account_name = NA_character_),
+            "single character string")
+        gdsCloudConfigGCS(access_token = "")
+    })
+})
+
+test_that("token provider functions travel to workers with the credentials", {
+    skip_on_cran()
+    skip_if_not_installed("parallel")
+    .with_clean_url_creds({
+        env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+        old <- env$gcs_access_token
+        on.exit(assign("gcs_access_token", old, envir = env), add = TRUE)
+        secret <- "from-parent-closure"
+        gdsCloudConfigGCS(access_token = function() secret)
+        cl <- parallel::makeCluster(1L)
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+        ok <- tryCatch(
+            parallel::clusterEvalQ(cl, requireNamespace("gdscloud",
+                quietly = TRUE))[[1L]],
+            error = function(e) FALSE)
+        skip_if_not(isTRUE(ok), "gdscloud not installed on worker")
+        expect_true(gdsCloudExportCredentials(cl))
+        got <- parallel::clusterEvalQ(cl,
+            gdscloud:::.get_gcs_credentials("gs://b/k")$access_token)[[1L]]
+        expect_equal(got, "from-parent-closure")
+    })
+})

@@ -131,3 +131,35 @@ test_that("an Azure custom endpoint round-trips through the Azure backend", {
 
     expect_error(gdsCloudOpen("az://data/missing.gds"), "Azure: HTTP 404")
 })
+
+test_that("a bearer-token provider function is used when opening", {
+    env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+    old <- list(tok = env$http_bearer_token, url = env$url_credentials)
+    on.exit({
+        env$http_bearer_token <- old$tok
+        env$url_credentials <- old$url
+    }, add = TRUE)
+    withr::local_envvar(GDSCLOUD_HTTP_TOKEN = NA)
+    env$url_credentials <- list()
+    u <- paste0(srv$url, "/auth/test.gds")
+
+    gdsCloudConfigHTTP(bearer_token = "")
+    expect_error(gdsCloudOpen(u), "HTTP 401")
+
+    calls <- 0L
+    gdsCloudConfigHTTP(bearer_token = function() {
+        calls <<- calls + 1L
+        "secret-token"
+    })
+    gds <- gdsCloudOpen(u)
+    expect_identical(read.gdsn(index.gdsn(gds, "sample.id")), ref$sample.id)
+    closefn.gds(gds)
+    gds <- gdsCloudOpen(u)
+    closefn.gds(gds)
+    # called once per open, not per request
+    expect_equal(calls, 2L)
+
+    # a provider returning a stale token fails with the server's message
+    gdsCloudConfigHTTP(bearer_token = function() "expired")
+    expect_error(gdsCloudOpen(u), "unauthorized")
+})

@@ -28,6 +28,32 @@
 
 
 #############################################################
+# Internal: resolve a credential value
+#
+# A token (access_token, bearer_token) may be given as a string or as a
+# function returning a string (a "token provider"). The function is
+# called every time a URL is opened, so short-lived tokens (GCS OAuth2,
+# Azure Entra ID) can be refreshed transparently; returning NULL or ""
+# means "not available", and the next fallback is used.
+#
+.resolve_cred <- function(v)
+{
+    if (is.function(v))
+    {
+        v <- v()
+        if (is.null(v)) return(NULL)
+    }
+    if (is.null(v)) return(NULL)
+    if (!is.character(v) || length(v) != 1L)
+    {
+        stop("A credential must be a single character string, or a ",
+            "function returning one.", call.=FALSE)
+    }
+    if (is.na(v)) NULL else v
+}
+
+
+#############################################################
 # Internal: first non-empty string wins (URL > global > env)
 #
 .first_nonempty <- function(...)
@@ -35,10 +61,37 @@
     vals <- list(...)
     for (v in vals)
     {
+        v <- .resolve_cred(v)
         if (!is.null(v) && nzchar(v))
             return(v)
     }
     ""
+}
+
+
+#############################################################
+# Internal: validate the arguments of the config functions.
+# Tokens (access_token, bearer_token) may be a string or a provider
+# function; keys and other settings must be strings.
+#
+.check_token_arg <- function(v, name)
+{
+    if (is.null(v) || is.function(v)) return(invisible())
+    if (!is.character(v) || length(v) != 1L || is.na(v))
+    {
+        stop("'", name, "' must be NULL, a single character string, or a ",
+            "function returning a character string.", call.=FALSE)
+    }
+    invisible()
+}
+
+.check_string_arg <- function(v, name)
+{
+    if (is.null(v)) return(invisible())
+    if (!is.character(v) || length(v) != 1L || is.na(v))
+        stop("'", name, "' must be NULL or a single character string.",
+            call.=FALSE)
+    invisible()
 }
 
 
@@ -122,6 +175,7 @@
 #
 gdsCloudConfigHTTP <- function(bearer_token=NULL, url=NULL)
 {
+    .check_token_arg(bearer_token, "bearer_token")
     if (is.null(url))
     {
         if (!is.null(bearer_token))
@@ -148,6 +202,10 @@ gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
     aws_secret_access_key=NULL, region=NULL, session_token=NULL,
     endpoint=NULL, path_style=NULL, url=NULL)
 {
+    .check_string_arg(aws_access_key_id, "aws_access_key_id")
+    .check_string_arg(aws_secret_access_key, "aws_secret_access_key")
+    .check_string_arg(session_token, "session_token")
+    .check_string_arg(region, "region")
     if (!is.null(endpoint))
     {
         if (!is.character(endpoint) || length(endpoint) != 1L ||
@@ -195,6 +253,7 @@ gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
 #
 gdsCloudConfigGCS <- function(access_token=NULL, url=NULL)
 {
+    .check_token_arg(access_token, "access_token")
     if (is.null(url))
     {
         if (!is.null(access_token))
@@ -215,14 +274,12 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
     sas_token=NULL, access_token=NULL, endpoint_suffix=NULL, endpoint=NULL,
     url=NULL)
 {
-    check_str <- function(v, name)
-    {
-        if (!is.null(v) && (!is.character(v) || length(v) != 1L || is.na(v)))
-            stop("'", name, "' must be a single character string.", call.=FALSE)
-    }
-    check_str(access_token, "access_token")
-    check_str(endpoint_suffix, "endpoint_suffix")
-    check_str(endpoint, "endpoint")
+    .check_string_arg(account_name, "account_name")
+    .check_string_arg(account_key, "account_key")
+    .check_string_arg(sas_token, "sas_token")
+    .check_token_arg(access_token, "access_token")
+    .check_string_arg(endpoint_suffix, "endpoint_suffix")
+    .check_string_arg(endpoint, "endpoint")
     fields <- list(
         azure_account_name    = account_name,
         azure_account_key     = account_key,

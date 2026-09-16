@@ -16,6 +16,13 @@ NEW FEATURES
       AZURE_STORAGE_* environment variables and the fields of
       AZURE_STORAGE_CONNECTION_STRING are read as fallbacks
 
+    o The token arguments `access_token` (`gdsCloudConfigGCS()`,
+      `gdsCloudConfigAzure()`) and `bearer_token` (`gdsCloudConfigHTTP()`)
+      may be a function returning the token; it is called each time a
+      file is opened, so expiring tokens (Google OAuth2, Microsoft Entra
+      ID) can be refreshed by plugging in gargle, AzureAuth or similar
+      packages. Keys remain plain strings
+
     o Cloud requests now have a connect timeout (30 s) and a low-speed
       timeout (60 s below 1 byte/s), so a stalled connection no longer
       blocks R indefinitely
