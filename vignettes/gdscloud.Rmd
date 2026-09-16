@@ -286,11 +286,26 @@ gdsCloudConfigAzure(account_name = "mystorageaccount", access_token = function()
         tenant = "mytenant", app = "myapp")$credentials$access_token)
 ```
 
+AWS temporary credentials (STS, SSO, instance roles) are three values that
+expire together, so for S3 a single `credentials` function returns the
+whole set; the AWS CLI's `export-credentials` command resolves the complete
+AWS credential chain:
+
+```{r auth-provider-aws, eval=FALSE}
+gdsCloudConfigS3(credentials = function() {
+    out <- system2("aws", c("configure", "export-credentials",
+        "--format", "process"), stdout = TRUE)
+    j <- jsonlite::fromJSON(paste(out, collapse = ""))
+    list(aws_access_key_id = j$AccessKeyId,
+        aws_secret_access_key = j$SecretAccessKey,
+        session_token = j$SessionToken)
+})
+```
+
 A function returning `NULL` or `""` means no token is available and the
 next fallback is used. Provider functions are exported to parallel workers
-by `gdsCloudExportCredentials()` like any other credential. Keys (AWS
-access keys, Azure account keys, SAS tokens) are long-lived and are always
-given as strings.
+by `gdsCloudExportCredentials()` like any other credential. Static keys
+(AWS access keys, Azure account keys, SAS tokens) are given as strings.
 
 ## URL-specific credentials
 

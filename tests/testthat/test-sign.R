@@ -6,7 +6,7 @@
     env <- get(".gdscloud_env", envir = asNamespace("gdscloud"),
         inherits = FALSE)
     nms <- c("aws_access_key_id", "aws_secret_access_key", "aws_region",
-        "aws_session_token", "aws_endpoint", "aws_path_style",
+        "aws_session_token", "aws_credentials", "aws_endpoint", "aws_path_style",
         "azure_account_name", "azure_account_key",
         "azure_sas_token", "azure_access_token", "azure_endpoint_suffix",
         "azure_endpoint", "gcs_access_token", "http_bearer_token")
@@ -329,5 +329,21 @@ test_that("Azure credentials resolve from env vars and the connection string", {
         expect_equal(gdscloud:::.get_azure_credentials("az://c/b")$account_name,
             "explicit")
         expect_equal(gdscloud:::.azure_connection_string("")$account_name, "")
+    })
+})
+
+test_that("an AWS credentials function feeds the SigV4 signer", {
+    .with_creds({
+        gdsCloudConfigS3(aws_access_key_id = "", aws_secret_access_key = "",
+            session_token = "", region = "us-west-2",
+            credentials = function() list(aws_access_key_id = "AKIAPROV",
+                aws_secret_access_key = "s", session_token = "STSTOKEN"))
+        r <- gdscloud:::.prepare_request("s3://b/k.gds")
+        auth <- grep("^Authorization:", r$headers, value = TRUE)
+        expect_match(auth, "Credential=AKIAPROV/[0-9]{8}/us-west-2/s3/aws4_request")
+        expect_match(auth, "x-amz-security-token,")
+        expect_true("x-amz-security-token: STSTOKEN" %in% r$headers)
+        env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+        assign("aws_credentials", NULL, envir = env)
     })
 })

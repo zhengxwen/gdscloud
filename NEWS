@@ -23,6 +23,12 @@ NEW FEATURES
       ID) can be refreshed by plugging in gargle, AzureAuth or similar
       packages. Keys remain plain strings
 
+    o `gdsCloudConfigS3(credentials=)` takes a function returning the
+      access key, secret and session token as one set, called each time a
+      file is opened, for AWS temporary credentials (STS, SSO, instance
+      roles) obtained e.g. from `aws configure export-credentials` or
+      aws.signature
+
     o Cloud requests now have a connect timeout (30 s) and a low-speed
       timeout (60 s below 1 byte/s), so a stalled connection no longer
       blocks R indefinitely

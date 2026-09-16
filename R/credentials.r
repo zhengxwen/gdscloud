@@ -200,12 +200,18 @@ gdsCloudConfigHTTP <- function(bearer_token=NULL, url=NULL)
 #
 gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
     aws_secret_access_key=NULL, region=NULL, session_token=NULL,
-    endpoint=NULL, path_style=NULL, url=NULL)
+    credentials=NULL, endpoint=NULL, path_style=NULL, url=NULL)
 {
     .check_string_arg(aws_access_key_id, "aws_access_key_id")
     .check_string_arg(aws_secret_access_key, "aws_secret_access_key")
     .check_string_arg(session_token, "session_token")
     .check_string_arg(region, "region")
+    if (!is.null(credentials) && !is.function(credentials))
+    {
+        stop("'credentials' must be NULL or a function returning a list ",
+            "with 'aws_access_key_id', 'aws_secret_access_key' and ",
+            "optionally 'session_token'.", call.=FALSE)
+    }
     if (!is.null(endpoint))
     {
         if (!is.character(endpoint) || length(endpoint) != 1L ||
@@ -230,6 +236,8 @@ gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
             .gdscloud_env$aws_region <- region
         if (!is.null(session_token))
             .gdscloud_env$aws_session_token <- session_token
+        if (!is.null(credentials))
+            .gdscloud_env$aws_credentials <- credentials
         if (!is.null(endpoint))
             .gdscloud_env$aws_endpoint <- endpoint
         if (!is.null(path_style))
@@ -240,6 +248,7 @@ gdsCloudConfigS3 <- function(aws_access_key_id=NULL,
             aws_secret_access_key = aws_secret_access_key,
             aws_region            = region,
             aws_session_token     = session_token,
+            aws_credentials       = credentials,
             aws_endpoint          = endpoint,
             aws_path_style        = path_style
         ))
@@ -325,24 +334,45 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
 .get_s3_credentials <- function(url=NULL)
 {
     m <- .match_url_credentials(url, "s3")
-    list(
-        access_key = .first_nonempty(
+
+    # A credential provider function (URL-specific entry first, then the
+    # global one) supplies access key, secret and session token as one
+    # consistent set; it is consulted before the static values of its
+    # layer and, when it yields a key, replaces the static chain entirely,
+    # since mixing e.g. a fresh key with a stale token would be wrong.
+    prov <- .call_aws_provider(m$aws_credentials, "URL-specific")
+    if (is.null(prov))
+        prov <- .call_aws_provider(.gdscloud_env$aws_credentials, "global")
+    if (!is.null(prov))
+    {
+        access_key <- prov$aws_access_key_id
+        secret_key <- prov$aws_secret_access_key
+        session_token <- prov$session_token
+    } else {
+        access_key <- .first_nonempty(
             m$aws_access_key_id,
             .gdscloud_env$aws_access_key_id,
-            Sys.getenv("AWS_ACCESS_KEY_ID", "")),
-        secret_key = .first_nonempty(
+            Sys.getenv("AWS_ACCESS_KEY_ID", ""))
+        secret_key <- .first_nonempty(
             m$aws_secret_access_key,
             .gdscloud_env$aws_secret_access_key,
-            Sys.getenv("AWS_SECRET_ACCESS_KEY", "")),
+            Sys.getenv("AWS_SECRET_ACCESS_KEY", ""))
+        session_token <- .first_nonempty(
+            m$aws_session_token,
+            .gdscloud_env$aws_session_token,
+            Sys.getenv("AWS_SESSION_TOKEN", ""))
+    }
+
+    list(
+        access_key = access_key,
+        secret_key = secret_key,
         region = .first_nonempty(
+            prov$region,
             m$aws_region,
             .gdscloud_env$aws_region,
             Sys.getenv("AWS_DEFAULT_REGION", ""),
             "us-east-1"),
-        session_token = .first_nonempty(
-            m$aws_session_token,
-            .gdscloud_env$aws_session_token,
-            Sys.getenv("AWS_SESSION_TOKEN", "")),
+        session_token = session_token,
         # S3-compatible services: custom endpoint and addressing style
         endpoint = .first_nonempty(
             m$aws_endpoint,
@@ -354,6 +384,52 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
             .gdscloud_env$aws_path_style,
             .env_logical("GDSCLOUD_S3_PATH_STYLE"))
     )
+}
+
+
+#############################################################
+# Internal: call an AWS credential provider function
+#
+# Returns NULL when there is no provider or it returns NULL / no access
+# key (meaning "not available"); otherwise a list with the character
+# fields aws_access_key_id, aws_secret_access_key, session_token ("" if
+# absent) and region ("" if absent). `aws_session_token` is accepted as
+# an alias of `session_token` (the name used by aws.signature and paws).
+#
+.call_aws_provider <- function(f, what)
+{
+    if (is.null(f)) return(NULL)
+    v <- f()
+    if (is.null(v)) return(NULL)
+    if (!is.list(v) || is.null(names(v)))
+    {
+        stop("The ", what, " AWS 'credentials' function must return a ",
+            "named list (aws_access_key_id, aws_secret_access_key, ",
+            "session_token) or NULL.", call.=FALSE)
+    }
+    get <- function(nm, alt=NULL)
+    {
+        x <- v[[nm]]
+        if (is.null(x) && !is.null(alt)) x <- v[[alt]]
+        if (is.null(x)) return("")
+        if (!is.character(x) || length(x) != 1L)
+        {
+            stop("The ", what, " AWS 'credentials' function returned a ",
+                "non-string value for '", nm, "'.", call.=FALSE)
+        }
+        if (is.na(x)) "" else x
+    }
+    key <- get("aws_access_key_id")
+    if (!nzchar(key)) return(NULL)
+    secret <- get("aws_secret_access_key")
+    if (!nzchar(secret))
+    {
+        stop("The ", what, " AWS 'credentials' function returned an access ",
+            "key without 'aws_secret_access_key'.", call.=FALSE)
+    }
+    list(aws_access_key_id = key, aws_secret_access_key = secret,
+        session_token = get("session_token", "aws_session_token"),
+        region = get("region"))
 }
 
 
@@ -492,7 +568,8 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
     nms <- c(
         # S3
         "aws_access_key_id", "aws_secret_access_key", "aws_region",
-        "aws_session_token", "aws_endpoint", "aws_path_style",
+        "aws_session_token", "aws_credentials", "aws_endpoint",
+        "aws_path_style",
         # GCS
         "gcs_access_token",
         # Azure

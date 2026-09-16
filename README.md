@@ -113,7 +113,9 @@ Token arguments (`access_token` for GCS and Azure, `bearer_token` for HTTP)
 can also be a function returning the token; it is called each time a file
 is opened, so expiring tokens are refreshed automatically (e.g.
 `gdsCloudConfigGCS(access_token = function()
-system2("gcloud", c("auth", "print-access-token"), stdout = TRUE))`).
+system2("gcloud", c("auth", "print-access-token"), stdout = TRUE))`). For AWS
+temporary credentials, `gdsCloudConfigS3(credentials = function() list(...))`
+returns the access key, secret and session token together.
 
 ### AWS S3
 Set environment variables (via `Sys.setenv()` in R, or the corresponding

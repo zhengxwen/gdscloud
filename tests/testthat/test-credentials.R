@@ -389,3 +389,105 @@ test_that("token provider functions travel to workers with the credentials", {
         expect_equal(got, "from-parent-closure")
     })
 })
+
+test_that("an AWS credentials function supplies the whole set", {
+    .with_clean_url_creds({
+        withr::local_envvar(AWS_ACCESS_KEY_ID = NA, AWS_SECRET_ACCESS_KEY = NA,
+            AWS_SESSION_TOKEN = NA, AWS_DEFAULT_REGION = NA)
+        env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+        nms <- c("aws_access_key_id", "aws_secret_access_key",
+            "aws_session_token", "aws_region", "aws_credentials")
+        old <- mget(nms, envir = env, ifnotfound = list(NULL))
+        on.exit(for (nm in nms) assign(nm, old[[nm]], envir = env), add = TRUE)
+        reset <- function() {
+            for (nm in nms) assign(nm, NULL, envir = env)
+            gdsCloudConfigS3(aws_access_key_id = "STATIC_KEY",
+                aws_secret_access_key = "STATIC_SECRET", region = "eu-west-1")
+        }
+        reset()
+
+        calls <- 0L
+        gdsCloudConfigS3(credentials = function() {
+            calls <<- calls + 1L
+            list(aws_access_key_id = paste0("K", calls),
+                aws_secret_access_key = "S", session_token = "T")
+        })
+        expect_equal(calls, 0L)
+        cred <- gdscloud:::.get_s3_credentials("s3://b/k")
+        expect_equal(c(cred$access_key, cred$secret_key, cred$session_token),
+            c("K1", "S", "T"))
+        expect_equal(cred$region, "eu-west-1")   # static region still used
+        expect_equal(gdscloud:::.get_s3_credentials("s3://b/k")$access_key, "K2")
+
+        # a region returned by the provider takes precedence; the
+        # aws.signature-style name for the token is accepted; a missing
+        # token means no token
+        gdsCloudConfigS3(credentials = function() list(
+            aws_access_key_id = "K", aws_secret_access_key = "S",
+            aws_session_token = "AT", region = "ap-southeast-2"))
+        cred <- gdscloud:::.get_s3_credentials("s3://b/k")
+        expect_equal(cred$session_token, "AT")
+        expect_equal(cred$region, "ap-southeast-2")
+        gdsCloudConfigS3(credentials = function() list(
+            aws_access_key_id = "K", aws_secret_access_key = "S"))
+        expect_equal(gdscloud:::.get_s3_credentials("s3://b/k")$session_token, "")
+
+        # NULL or no access key: the static chain is used instead
+        gdsCloudConfigS3(credentials = function() NULL)
+        cred <- gdscloud:::.get_s3_credentials("s3://b/k")
+        expect_equal(c(cred$access_key, cred$secret_key),
+            c("STATIC_KEY", "STATIC_SECRET"))
+        gdsCloudConfigS3(credentials = function() list(aws_access_key_id = ""))
+        expect_equal(gdscloud:::.get_s3_credentials("s3://b/k")$access_key,
+            "STATIC_KEY")
+
+        # a URL-specific provider wins over the global one for its prefix
+        gdsCloudConfigS3(credentials = function() list(
+            aws_access_key_id = "GLOBAL", aws_secret_access_key = "S"))
+        gdsCloudConfigS3(credentials = function() list(
+            aws_access_key_id = "BUCKET", aws_secret_access_key = "S"),
+            url = "s3://special/")
+        expect_equal(gdscloud:::.get_s3_credentials("s3://special/k")$access_key,
+            "BUCKET")
+        expect_equal(gdscloud:::.get_s3_credentials("s3://other/k")$access_key,
+            "GLOBAL")
+        gdsCloudConfigS3(url = "s3://special/")
+
+        # validation of the argument and of the returned value
+        expect_error(gdsCloudConfigS3(credentials = "K"), "function")
+        gdsCloudConfigS3(credentials = function() "K")
+        expect_error(gdscloud:::.get_s3_credentials("s3://b/k"), "named list")
+        gdsCloudConfigS3(credentials = function() list(aws_access_key_id = 1))
+        expect_error(gdscloud:::.get_s3_credentials("s3://b/k"), "non-string")
+        gdsCloudConfigS3(credentials = function() list(aws_access_key_id = "K"))
+        expect_error(gdscloud:::.get_s3_credentials("s3://b/k"),
+            "without 'aws_secret_access_key'")
+        gdsCloudConfigS3(credentials = function() stop("sso session expired"))
+        expect_error(gdscloud:::.get_s3_credentials("s3://b/k"),
+            "sso session expired")
+    })
+})
+
+test_that("the AWS credentials function travels to workers", {
+    skip_on_cran()
+    skip_if_not_installed("parallel")
+    .with_clean_url_creds({
+        env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+        old <- env$aws_credentials
+        on.exit(assign("aws_credentials", old, envir = env), add = TRUE)
+        gdsCloudConfigS3(credentials = function() list(
+            aws_access_key_id = "WORKER_KEY", aws_secret_access_key = "S"))
+        cl <- parallel::makeCluster(1L)
+        on.exit(parallel::stopCluster(cl), add = TRUE)
+        ok <- tryCatch(
+            parallel::clusterEvalQ(cl, requireNamespace("gdscloud",
+                quietly = TRUE))[[1L]],
+            error = function(e) FALSE)
+        skip_if_not(isTRUE(ok), "gdscloud not installed on worker")
+        expect_true(gdsCloudExportCredentials(cl))
+        got <- parallel::clusterEvalQ(cl,
+            gdscloud:::.get_s3_credentials("s3://b/k")$access_key)[[1L]]
+        expect_equal(got, "WORKER_KEY")
+        assign("aws_credentials", NULL, envir = env)
+    })
+})

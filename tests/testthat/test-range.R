@@ -163,3 +163,22 @@ test_that("a bearer-token provider function is used when opening", {
     gdsCloudConfigHTTP(bearer_token = function() "expired")
     expect_error(gdsCloudOpen(u), "unauthorized")
 })
+
+test_that("an AWS credentials function is called once per open", {
+    env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+    nms <- c("aws_access_key_id", "aws_secret_access_key", "aws_credentials",
+        "aws_endpoint", "aws_path_style")
+    old <- mget(nms, envir = env, ifnotfound = list(NULL))
+    on.exit(for (nm in nms) assign(nm, old[[nm]], envir = env), add = TRUE)
+    calls <- 0L
+    gdsCloudConfigS3(endpoint = srv$url, credentials = function() {
+        calls <<- calls + 1L
+        list(aws_access_key_id = "AKIAEXAMPLE", aws_secret_access_key = "s",
+            session_token = "tok")
+    })
+    gds <- gdsCloudOpen("s3://data/test.gds")
+    expect_identical(read.gdsn(index.gdsn(gds, "sample.id")), ref$sample.id)
+    read.gdsn(index.gdsn(gds, "geno"))
+    closefn.gds(gds)
+    expect_equal(calls, 1L)
+})

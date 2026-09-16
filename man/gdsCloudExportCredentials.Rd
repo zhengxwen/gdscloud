@@ -31,8 +31,9 @@ gdsCloudExportCredentials(cl)
     and configuring credentials in the parent session, and before
     invoking \code{\link[SeqArray]{seqParallel}}.
 
-    Tokens given as provider functions (see
-    \code{\link{gdsCloudConfigS3}}) are serialized to the workers
+    Tokens given as provider functions and the AWS \code{credentials}
+    function (see \code{\link{gdsCloudConfigS3}}) are serialized to the
+    workers
     together with their enclosing environments, and are called on the
     worker when it opens a file; the packages and login state they rely
     on must therefore be available there as well.

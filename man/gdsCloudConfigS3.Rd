@@ -11,8 +11,8 @@
 }
 \usage{
 gdsCloudConfigS3(aws_access_key_id=NULL, aws_secret_access_key=NULL,
-    region=NULL, session_token=NULL, endpoint=NULL, path_style=NULL,
-    url=NULL)
+    region=NULL, session_token=NULL, credentials=NULL, endpoint=NULL,
+    path_style=NULL, url=NULL)
 
 gdsCloudConfigGCS(access_token=NULL, url=NULL)
 
@@ -24,6 +24,12 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
     \item{aws_secret_access_key}{AWS secret access key}
     \item{region}{AWS region (default: \code{"us-east-1"})}
     \item{session_token}{AWS session token for temporary credentials}
+    \item{credentials}{a function with no arguments returning a named
+        list with \code{aws_access_key_id}, \code{aws_secret_access_key}
+        and, for temporary credentials, \code{session_token} (optionally
+        also \code{region}), or \code{NULL} when no credentials are
+        available; called each time a file is opened. See
+        \sQuote{Token provider functions} below}
     \item{endpoint}{for \code{gdsCloudConfigS3}: base URL of an
         S3-compatible service, e.g. \code{"https://minio.example.org:9000"}
         or \code{"https://<account>.r2.cloudflarestorage.com"}; \code{""}
@@ -111,11 +117,21 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
     when the file is opened; requests made later on the same open file
     keep using the token obtained then.
 
+    AWS temporary credentials (STS, IAM Identity Center / SSO, EC2 or
+    EKS instance roles) are a set of three values that expire together,
+    so \code{gdsCloudConfigS3} takes one \code{credentials} function
+    returning the whole set as a named list instead of per-field
+    functions. When it returns an access key, the set is used as is (no
+    mixing with static values); when it returns \code{NULL} or no access
+    key, the static settings and environment variables are used. Static
+    AWS access keys, the Azure account key and SAS tokens are long-lived
+    and are given as strings.
+
     This is the intended way to plug in the login machinery of dedicated
-    packages, e.g. \pkg{gargle} or \pkg{googleAuthR} for Google and
-    \pkg{AzureAuth} for Azure; see the examples. Keys (AWS access keys,
-    the Azure account key, SAS tokens) are long-lived and must be given
-    as strings.
+    packages and tools, e.g. \pkg{gargle} or \pkg{googleAuthR} for
+    Google, \pkg{AzureAuth} for Azure, and the AWS CLI
+    (\code{aws configure export-credentials}) or \pkg{aws.signature}
+    for AWS; see the examples.
     }
 
     \subsection{Azure authentication}{
@@ -179,6 +195,24 @@ gdsCloudConfigGCS(access_token = function()
 gdsCloudConfigAzure(account_name = "mystorageaccount", access_token = function()
     AzureAuth::get_azure_token("https://storage.azure.com/",
         tenant = "mytenant", app = "myapp")$credentials$access_token)
+
+# AWS temporary credentials from the AWS CLI's credential chain
+# (profiles, SSO, assume-role, instance roles): the whole set at once
+gdsCloudConfigS3(credentials = function() {
+    out <- system2("aws", c("configure", "export-credentials",
+        "--format", "process"), stdout = TRUE)
+    j <- jsonlite::fromJSON(paste(out, collapse = ""))
+    list(aws_access_key_id = j$AccessKeyId,
+        aws_secret_access_key = j$SecretAccessKey,
+        session_token = j$SessionToken)
+})
+
+# ... or via aws.signature (field names are accepted as returned)
+gdsCloudConfigS3(credentials = function() {
+    cr <- aws.signature::locate_credentials()
+    list(aws_access_key_id = cr$key, aws_secret_access_key = cr$secret,
+        session_token = cr$session_token, region = cr$region)
+})
 
 # URL-specific credentials: different keys for different buckets
 gdsCloudConfigS3(
