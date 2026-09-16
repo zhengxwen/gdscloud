@@ -280,6 +280,9 @@ static long long azure_read_range(void *backend_data, const char *url,
 	cb.size = 0;
 	cb.capacity = length;
 
+	CloudRangeCheck rc;
+	cloud_range_check_init(&rc, offset);
+
 	curl_easy_reset(az->curl);
 	curl_easy_setopt(az->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(az->curl, CURLOPT_URL, url_str);
@@ -288,9 +291,16 @@ static long long azure_read_range(void *backend_data, const char *url,
 	curl_easy_setopt(az->curl, CURLOPT_WRITEDATA, &cb);
 	curl_easy_setopt(az->curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(az->curl, CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(az->curl, CURLOPT_HEADERFUNCTION, cloud_range_check_header_cb);
+	curl_easy_setopt(az->curl, CURLOPT_HEADERDATA, &rc);
 
 	CURLcode res = curl_easy_perform(az->curl);
 	curl_slist_free_all(headers);
+
+	// reject responses that do not cover the requested range
+	if (cloud_range_check_verify(&rc, res, "Azure", az->endpoint, offset, length,
+		az->last_error, sizeof(az->last_error)) != 0)
+		return -1;
 
 	if (res != CURLE_OK)
 	{

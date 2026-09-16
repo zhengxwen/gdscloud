@@ -1,3 +1,16 @@
+CHANGES IN VERSION 0.99.5
+-------------------------
+
+BUG FIXES
+
+    o Range reads now verify the server's response: a server that ignores
+      the HTTP Range header (answering 200 with the whole file) or reports
+      a different Content-Range start is rejected with a clear error;
+      previously the wrong bytes were silently cached as the requested
+      block. The transfer is aborted as soon as the mismatch is detected,
+      so the whole file is not downloaded.
+
+
 CHANGES IN VERSION 0.99.4
 -------------------------
 

@@ -138,6 +138,40 @@ void cloud_format_error(char *out, size_t out_size,
 
 
 // =====================================================================
+// Range-response validation (shared by the backends' read_range)
+//
+// A server that does not support HTTP Range requests answers 200 with the
+// whole file; a broken proxy may answer 206 for a different range. Both
+// would otherwise be copied into the block cache as if they were the
+// requested bytes. The helper parses the status line and Content-Range
+// header, aborts the transfer as soon as a mismatch is known (so the
+// whole file is not downloaded), and reports it as an error.
+// =====================================================================
+
+typedef struct CloudRangeCheck {
+	long long expected_offset;   // requested start offset
+	long http_code;              // status code of the current response
+	long long range_start;       // start parsed from Content-Range, -1 if absent
+	int aborted;                 // 1: 200 for offset > 0, 2: wrong Content-Range
+} CloudRangeCheck;
+
+/// Initialize before the transfer
+void cloud_range_check_init(CloudRangeCheck *rc, long long offset);
+
+/// CURLOPT_HEADERFUNCTION callback; CURLOPT_HEADERDATA is a CloudRangeCheck*
+size_t cloud_range_check_header_cb(char *buffer, size_t size, size_t nitems,
+	void *userdata);
+
+/// After curl_easy_perform(): returns 0 when the response matches the
+/// requested range (or failed for an unrelated reason, which the backend
+/// reports itself), or -1 with a message in `err` when the server did not
+/// honour the Range request.
+int cloud_range_check_verify(const CloudRangeCheck *rc, CURLcode res,
+	const char *prefix, const char *endpoint, long long offset,
+	long long length, char *err, size_t err_size);
+
+
+// =====================================================================
 // Block cache API (internal)
 // =====================================================================
 

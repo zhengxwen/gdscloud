@@ -132,6 +132,9 @@ static long long http_read_range(void *backend_data, const char *url,
 	cb.size = 0;
 	cb.capacity = length;
 
+	CloudRangeCheck rc;
+	cloud_range_check_init(&rc, offset);
+
 	curl_easy_reset(http->curl);
 	curl_easy_setopt(http->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(http->curl, CURLOPT_URL, http->url);
@@ -140,9 +143,16 @@ static long long http_read_range(void *backend_data, const char *url,
 	curl_easy_setopt(http->curl, CURLOPT_WRITEDATA, &cb);
 	curl_easy_setopt(http->curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(http->curl, CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(http->curl, CURLOPT_HEADERFUNCTION, cloud_range_check_header_cb);
+	curl_easy_setopt(http->curl, CURLOPT_HEADERDATA, &rc);
 
 	CURLcode res = curl_easy_perform(http->curl);
 	curl_slist_free_all(headers);
+
+	// reject responses that do not cover the requested range
+	if (cloud_range_check_verify(&rc, res, "HTTP", http->url, offset, length,
+		http->last_error, sizeof(http->last_error)) != 0)
+		return -1;
 
 	if (res != CURLE_OK)
 	{

@@ -23,7 +23,7 @@ Depends: R (>= 4.5.0), gdsfmt (>= 1.49.7)
 Encoding: UTF-8
 LinkingTo: gdsfmt
 Suggests: BiocParallel, BiocStyle, keyring, knitr, rmarkdown, testthat,
-        SeqArray
+        SeqArray, httpuv, callr
 VignetteBuilder: knitr
 License: LGPL-3
 SystemRequirements: libcurl (>= 7.28.0), OpenSSL
