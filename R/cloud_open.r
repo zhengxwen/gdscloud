@@ -194,3 +194,25 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
     .Call(gdscloud_open_azure, url,
         cred$account_name, cred$account_key, cred$sas_token, cache_mb)
 }
+
+
+#############################################################
+# Internal: the request a provider would send (URL and headers) for
+# `url`, without sending it; used to check signatures in the tests
+#
+.prepare_request <- function(url, range="bytes=0-0", time=Sys.time())
+{
+    scheme <- sub("://.*", "", url)
+    params <- switch(scheme,
+        http =, https = {
+            cred <- .get_http_credentials(url)
+            list(auth = if (nzchar(cred$bearer_token))
+                paste("Bearer", cred$bearer_token) else "")
+        },
+        s3 = .get_s3_credentials(url),
+        gs = .get_gcs_credentials(url),
+        az = .get_azure_credentials(url),
+        stop("Unsupported URL scheme: '", scheme, "'"))
+    .Call(gdscloud_prepare_request, url, params, range,
+        as.numeric(as.POSIXct(time, tz="UTC")))
+}

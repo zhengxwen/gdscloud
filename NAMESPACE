@@ -2,7 +2,7 @@
 useDynLib(gdscloud,
     gdscloud_open_http,
     gdscloud_open_s3, gdscloud_open_gcs, gdscloud_open_azure,
-    gdscloud_set_options,
+    gdscloud_prepare_request, gdscloud_set_options,
     gdscloud_cache_clear, gdscloud_cache_info, gdscloud_list_streams)
 
 # gdsfmt is in Depends, ensuring its DLL is loaded before ours (LinkingTo).

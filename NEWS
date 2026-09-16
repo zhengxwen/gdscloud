@@ -23,6 +23,19 @@ NEW FEATURES
       `gdsCloudOptions(max_retries=)` controls this and
       `gdsCloudCacheInfo()` reports the number of retried requests
 
+USER-VISIBLE CHANGES
+
+    o The four backends now share one generic libcurl backend
+      (src/curl_backend.c): transfers, Range validation, timeouts,
+      retries, interrupts, size detection and error formatting are
+      implemented once; a provider only resolves the URL and signs the
+      request. Error messages for HTTP failures now include the service's
+      request id when the response carries one
+
+    o Object keys and blob names are percent-encoded when building the
+      request URL (and the AWS SigV4 canonical URI), so keys containing
+      spaces, '+' or non-ASCII characters can be opened
+
 BUG FIXES
 
     o Range reads now verify the server's response: a server that ignores

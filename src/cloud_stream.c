@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <ctype.h>
 
 #include <R.h>
 #include <Rinternals.h>
@@ -424,91 +423,6 @@ int cloud_should_retry(CloudTransfer *tr, CURLcode res, CURL *curl,
 	}
 	g_total_retries++;
 	return 1;
-}
-
-
-// =====================================================================
-// Range-response validation
-// =====================================================================
-
-void cloud_range_check_init(CloudRangeCheck *rc, long long offset)
-{
-	rc->expected_offset = offset;
-	rc->http_code = 0;
-	rc->range_start = -1;
-	rc->aborted = 0;
-}
-
-size_t cloud_range_check_header_cb(char *buffer, size_t size, size_t nitems,
-	void *userdata)
-{
-	CloudRangeCheck *rc = (CloudRangeCheck *)userdata;
-	size_t total = size * nitems;
-
-	if (total >= 5 && strncmp(buffer, "HTTP/", 5) == 0)
-	{
-		// status line: "HTTP/1.1 206 Partial Content"; a new response
-		// starts here (also after a redirect), so reset the range info
-		const char *p = (const char *)memchr(buffer, ' ', total);
-		rc->http_code = p ? strtol(p + 1, NULL, 10) : 0;
-		rc->range_start = -1;
-		if (rc->http_code == 200 && rc->expected_offset > 0)
-		{
-			// the whole file is coming instead of the requested range:
-			// stop the transfer now rather than downloading all of it
-			rc->aborted = 1;
-			return 0;
-		}
-	}
-	else if (total > 14 && strncasecmp(buffer, "content-range:", 14) == 0)
-	{
-		// "Content-Range: bytes START-END/TOTAL" (or "bytes */TOTAL")
-		const char *p = buffer + 14;
-		const char *end = buffer + total;
-		while (p < end && (*p == ' ' || *p == '\t')) p++;
-		if (end - p >= 5 && strncasecmp(p, "bytes", 5) == 0) p += 5;
-		while (p < end && *p == ' ') p++;
-		if (p < end && isdigit((unsigned char)*p))
-		{
-			rc->range_start = strtoll(p, NULL, 10);
-			if (rc->http_code == 206 && rc->range_start != rc->expected_offset)
-			{
-				rc->aborted = 2;
-				return 0;
-			}
-		}
-	}
-	return total;
-}
-
-int cloud_range_check_verify(const CloudRangeCheck *rc, CURLcode res,
-	const char *prefix, const char *endpoint, long long offset,
-	long long length, char *err, size_t err_size)
-{
-	int problem = rc->aborted;
-	if (!problem && res == CURLE_OK)
-	{
-		if (rc->http_code == 200 && offset > 0)
-			problem = 1;
-		else if (rc->http_code == 206 && rc->range_start >= 0 &&
-			rc->range_start != offset)
-			problem = 2;
-	}
-	if (problem == 1)
-	{
-		snprintf(err, err_size, "%s: the server does not support HTTP Range "
-			"requests (it returned the whole file instead of bytes %lld-%lld "
-			"of '%s')", prefix, offset, offset + length - 1, endpoint);
-		return -1;
-	}
-	if (problem == 2)
-	{
-		snprintf(err, err_size, "%s: the server returned bytes starting at "
-			"%lld instead of the requested offset %lld ('%s')",
-			prefix, rc->range_start, offset, endpoint);
-		return -1;
-	}
-	return 0;
 }
 
 

@@ -1,7 +1,8 @@
 // ===========================================================
 // gdscloud: Cloud Storage Access for GDS Files
 //
-// azure_backend.c: Azure Blob Storage backend using libcurl
+// azure_backend.c: Azure Blob Storage provider (SAS token or Shared Key)
+//     for the generic curl backend
 //
 // Copyright (C) 2026    Xiuwen Zheng
 //
@@ -9,548 +10,222 @@
 // LGPL-3 License
 // ===========================================================
 
-#include "cloud_stream.h"
+#include "curl_backend.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
-#include <curl/curl.h>
-
-#include <R.h>
-#include <Rinternals.h>
 
 // Portable OpenSSL helpers (HMAC-SHA256)
 #include "openssl_compat.h"
-#include <openssl/bio.h>
-#include <openssl/buffer.h>
+
+#define AZURE_API_VERSION   "2020-10-02"
 
 
 // =====================================================================
-// Azure backend state
+// Provider state
 // =====================================================================
 
-typedef struct AzureBackendData {
+typedef struct AzureProviderData {
 	char account_name[256];
-	unsigned char account_key[512];        // decoded Shared Key bytes
-	size_t account_key_len;                // 0 when no key is configured
+	unsigned char account_key[512];          // decoded Shared Key bytes
+	size_t account_key_len;                  // 0 when no key is configured
 	char sas_token[CLOUD_MAX_CRED_LEN];
-	char container[512];
-	char blob_name[CLOUD_MAX_URL_LEN];
-	char endpoint[CLOUD_MAX_ENDPOINT_LEN];
-	CURL *curl;
-	char last_error[CLOUD_MAX_ERROR_LEN];
-} AzureBackendData;
+	char canonical_resource[CLOUD_MAX_URL_LEN + 1024];  // "/account/container/blob"
+	char endpoint[CLOUD_MAX_ENDPOINT_LEN];   // blob URL without the SAS token
+} AzureProviderData;
 
 
 // =====================================================================
-// Helper: curl write callback
+// Shared Key signature (Blob service, version 2009-09-19 and later)
 // =====================================================================
 
-typedef struct {
-	unsigned char *buf;
-	long long size;
-	long long capacity;
-} AzureCurlBuffer;
-
-static size_t azure_curl_write_cb(void *data, size_t size, size_t nmemb,
-	void *userp)
+static int azure_sign_request(const AzureProviderData *az,
+	const char *range_value, const char *date_str,
+	char *auth_header, size_t auth_size)
 {
-	AzureCurlBuffer *cb = (AzureCurlBuffer *)userp;
-	size_t realsize = size * nmemb;
-	if (cb->size + (long long)realsize > cb->capacity)
-		realsize = (size_t)(cb->capacity - cb->size);
-	if (realsize > 0)
-	{
-		memcpy(cb->buf + cb->size, data, realsize);
-		cb->size += realsize;
-	}
-	return size * nmemb;
-}
+	char string_to_sign[CLOUD_MAX_URL_LEN + 2048];
+	snprintf(string_to_sign, sizeof(string_to_sign),
+		"GET\n"   // method
+		"\n"      // Content-Encoding
+		"\n"      // Content-Language
+		"\n"      // Content-Length
+		"\n"      // Content-MD5
+		"\n"      // Content-Type
+		"\n"      // Date
+		"\n"      // If-Modified-Since
+		"\n"      // If-Match
+		"\n"      // If-None-Match
+		"\n"      // If-Unmodified-Since
+		"%s\n"    // Range
+		"x-ms-date:%s\n"
+		"x-ms-version:" AZURE_API_VERSION "\n"
+		"%s",     // canonicalized resource
+		range_value, date_str, az->canonical_resource);
 
+	unsigned char sig[32];
+	hmac_sha256(az->account_key, az->account_key_len,
+		(const unsigned char *)string_to_sign, strlen(string_to_sign), sig);
 
-// =====================================================================
-// Helper: header callback
-// =====================================================================
-
-// Parse total size from "Content-Range: bytes 0-0/<TOTAL>".
-static long long azure_parse_content_range_total(const char *value)
-{
-	const char *slash = strchr(value, '/');
-	if (!slash) return -1;
-	slash++;
-	while (*slash == ' ') slash++;
-	if (*slash == '*') return -1;
-	return strtoll(slash, NULL, 10);
-}
-
-// Header callback used by azure_get_size (GET+Range:0-0).
-// Prefers Content-Range's total; otherwise falls back to
-// x-ms-blob-content-length (the full-blob size) and finally Content-Length.
-static size_t azure_getsize_header_cb(char *buffer, size_t size, size_t nitems,
-	void *userdata)
-{
-	long long *file_size = (long long *)userdata;
-	size_t total = size * nitems;
-
-	if (total > 14 && strncasecmp(buffer, "content-range:", 14) == 0)
-	{
-		const char *p = buffer + 14;
-		size_t remaining = total - 14;
-		while (remaining > 0 && (*p == ' ' || *p == '\t'))
-			{ p++; remaining--; }
-		char value[128];
-		size_t n = (remaining < sizeof(value) - 1) ? remaining : sizeof(value) - 1;
-		memcpy(value, p, n);
-		value[n] = '\0';
-		long long sz = azure_parse_content_range_total(value);
-		if (sz >= 0) *file_size = sz;
-	}
-	else if (*file_size < 0 && total > 26 &&
-		strncasecmp(buffer, "x-ms-blob-content-length:", 25) == 0)
-	{
-		*file_size = strtoll(buffer + 25, NULL, 10);
-	}
-	else if (*file_size < 0 && total > 16 &&
-		strncasecmp(buffer, "content-length:", 15) == 0)
-	{
-		*file_size = strtoll(buffer + 15, NULL, 10);
-	}
-	return total;
-}
-
-
-// =====================================================================
-// Helper: Base64 decode/encode (for Azure Shared Key)
-// =====================================================================
-
-/// Decode `input` into `output` (at most `out_size` bytes). Returns the
-/// number of decoded bytes, or -1 if the input is not valid base64 or
-/// does not fit into `output`.
-static long base64_decode(const char *input, unsigned char *output,
-	size_t out_size)
-{
-	BIO *bio, *b64;
-	size_t input_len = strlen(input);
-	if (input_len == 0 || out_size == 0) return -1;
-	b64 = BIO_new(BIO_f_base64());
-	bio = BIO_new_mem_buf(input, (int)input_len);
-	bio = BIO_push(b64, bio);
-	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-	int n = BIO_read(bio, output, (int)out_size);
-	if (n > 0 && (size_t)n == out_size)
-	{
-		// anything left over means the input is longer than the buffer
-		unsigned char extra;
-		if (BIO_read(bio, &extra, 1) > 0) n = -1;
-	}
-	BIO_free_all(bio);
-	return (n > 0) ? n : -1;
-}
-
-static int base64_encode(const unsigned char *input, size_t input_len,
-	char *output, size_t out_size)
-{
-	BIO *bio, *b64;
-	BUF_MEM *bptr;
-	b64 = BIO_new(BIO_f_base64());
-	bio = BIO_new(BIO_s_mem());
-	bio = BIO_push(b64, bio);
-	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-	BIO_write(bio, input, (int)input_len);
-	(void)BIO_flush(bio);
-	BIO_get_mem_ptr(bio, &bptr);
-	if (bptr->length < out_size)
-	{
-		memcpy(output, bptr->data, bptr->length);
-		output[bptr->length] = '\0';
-	} else {
-		BIO_free_all(bio);
+	char sig_b64[64];
+	if (cloud_base64_encode(sig, 32, sig_b64, sizeof(sig_b64)) != 0)
 		return -1;
-	}
-	BIO_free_all(bio);
+	snprintf(auth_header, auth_size, "Authorization: SharedKey %s:%s",
+		az->account_name, sig_b64);
 	return 0;
 }
 
 
 // =====================================================================
-// Azure Shared Key signature
+// Provider vtable implementation
 // =====================================================================
 
-static void azure_sign_request(AzureBackendData *az, const char *method,
-	const char *resource_path, const char *range_header,
-	char *auth_header, size_t auth_size,
-	char *date_header, size_t date_size)
+static int azure_prepare(void *pd, const char *range_value, time_t now,
+	CurlRequest *req, char *err, size_t err_size)
 {
-	time_t now = time(NULL);
-	struct tm utc;
-#ifdef _WIN32
-	gmtime_s(&utc, &now);
-#else
-	gmtime_r(&now, &utc);
-#endif
-
-	char date_str[64];
-	strftime(date_str, sizeof(date_str), "%a, %d %b %Y %H:%M:%S GMT", &utc);
-	snprintf(date_header, date_size, "x-ms-date: %s", date_str);
-
-	// string to sign for Blob service
-	char string_to_sign[4096];
-	snprintf(string_to_sign, sizeof(string_to_sign),
-		"%s\n"    // method
-		"\n"      // content-encoding
-		"\n"      // content-language
-		"\n"      // content-length
-		"\n"      // content-md5
-		"\n"      // content-type
-		"\n"      // date
-		"\n"      // if-modified-since
-		"\n"      // if-match
-		"\n"      // if-none-match
-		"\n"      // if-unmodified-since
-		"%s\n"    // range
-		"x-ms-date:%s\n"
-		"x-ms-version:2020-10-02\n"
-		"/%s%s",
-		method,
-		range_header ? range_header : "",
-		date_str,
-		az->account_name, resource_path);
-
-	// HMAC-SHA256 with the decoded account key
-	unsigned char sig[32];
-	hmac_sha256(az->account_key, az->account_key_len,
-		(unsigned char *)string_to_sign, strlen(string_to_sign), sig);
-	unsigned int sig_len = 32;
-
-	// base64 encode signature
-	char sig_b64[128];
-	base64_encode(sig, sig_len, sig_b64, sizeof(sig_b64));
-
-	snprintf(auth_header, auth_size,
-		"Authorization: SharedKey %s:%s", az->account_name, sig_b64);
-}
-
-
-// =====================================================================
-// Azure backend: read_range
-// =====================================================================
-
-static long long azure_read_range(void *backend_data, const char *url,
-	long long offset, long long length, unsigned char *buffer)
-{
-	AzureBackendData *az = (AzureBackendData *)backend_data;
-	cloud_check_reinit_curl(&az->curl);
-	if (!az->curl) return -1;
-
-	struct curl_slist *headers = NULL;
-
-	char range_str[128];
-	snprintf(range_str, sizeof(range_str), "bytes=%lld-%lld",
-		offset, offset + length - 1);
-
-	char url_str[CLOUD_MAX_ENDPOINT_LEN + CLOUD_MAX_CRED_LEN + 16];
-	strncpy(url_str, az->endpoint, sizeof(url_str) - 1);
-	url_str[sizeof(url_str) - 1] = '\0';
-
-	// SAS token or Shared Key
-	if (az->sas_token[0])
-	{
-		// append SAS token to URL
-		char sep = (strchr(az->endpoint, '?') != NULL) ? '&' : '?';
-		snprintf(url_str, sizeof(url_str), "%s%c%s",
-			az->endpoint, sep, az->sas_token);
-
-		char range_hdr[160];
-		snprintf(range_hdr, sizeof(range_hdr), "Range: %s", range_str);
-		headers = curl_slist_append(headers, range_hdr);
-	}
-	else if (az->account_key_len > 0)
-	{
-		char auth_hdr[2048], date_hdr[128];
-		char resource_path[CLOUD_MAX_ENDPOINT_LEN];
-		snprintf(resource_path, sizeof(resource_path),
-			"/%s/%s", az->container, az->blob_name);
-		azure_sign_request(az, "GET", resource_path, range_str,
-			auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
-		headers = curl_slist_append(headers, auth_hdr);
-		headers = curl_slist_append(headers, date_hdr);
-		headers = curl_slist_append(headers, "x-ms-version: 2020-10-02");
-
-		char range_hdr[160];
-		snprintf(range_hdr, sizeof(range_hdr), "Range: %s", range_str);
-		headers = curl_slist_append(headers, range_hdr);
-	}
-
-	AzureCurlBuffer cb;
-	cb.buf = buffer;
-	cb.size = 0;
-	cb.capacity = length;
-
-	CloudRangeCheck rc;
-	cloud_range_check_init(&rc, offset);
-
-	CloudTransfer tr;
-	curl_easy_reset(az->curl);
-	cloud_curl_setup(az->curl, &tr);
-	curl_easy_setopt(az->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
-	curl_easy_setopt(az->curl, CURLOPT_URL, url_str);
-	curl_easy_setopt(az->curl, CURLOPT_HTTPHEADER, headers);
-	curl_easy_setopt(az->curl, CURLOPT_WRITEFUNCTION, azure_curl_write_cb);
-	curl_easy_setopt(az->curl, CURLOPT_WRITEDATA, &cb);
-	curl_easy_setopt(az->curl, CURLOPT_NOSIGNAL, 1L);
-	curl_easy_setopt(az->curl, CURLOPT_FOLLOWLOCATION, 1L);
-	curl_easy_setopt(az->curl, CURLOPT_HEADERFUNCTION, cloud_range_check_header_cb);
-	curl_easy_setopt(az->curl, CURLOPT_HEADERDATA, &rc);
-
-	// perform the request, retrying transient failures with back-off
-	CURLcode res;
-	for (int attempt = 0; ; attempt++)
-	{
-		cb.size = 0;
-		cloud_range_check_init(&rc, offset);
-		res = curl_easy_perform(az->curl);
-		if (!cloud_should_retry(&tr, res, az->curl, attempt)) break;
-	}
-	curl_slist_free_all(headers);
-
-	if (cloud_transfer_interrupted(&tr, res, "Azure", az->last_error,
-		sizeof(az->last_error)))
-		return -1;
-
-	// reject responses that do not cover the requested range
-	if (cloud_range_check_verify(&rc, res, "Azure", az->endpoint, offset, length,
-		az->last_error, sizeof(az->last_error)) != 0)
-		return -1;
-
-	if (res != CURLE_OK)
-	{
-		cloud_format_error(az->last_error, sizeof(az->last_error),
-			"Azure", az->endpoint, res, 0, NULL, 0);
-		return -1;
-	}
-
-	long http_code = 0;
-	curl_easy_getinfo(az->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200 && http_code != 206)
-	{
-		cloud_format_error(az->last_error, sizeof(az->last_error),
-			"Azure", az->endpoint, CURLE_OK, http_code, cb.buf, cb.size);
-		return -1;
-	}
-
-	return cb.size;
-}
-
-
-// =====================================================================
-// Azure backend: get_size
-//
-// Uses GET with Range: bytes=0-0 instead of HEAD so that, on error,
-// Azure returns its XML error body (e.g. <Error><Code>AuthenticationFailed
-// </Code>...<AuthenticationErrorDetail>...</AuthenticationErrorDetail>)
-// that can be surfaced to the user. HEAD requests return an empty body
-// on error, losing all diagnostic detail. On success, the server returns
-// Content-Range: bytes 0-0/<TOTAL>, from which the file size is parsed.
-// =====================================================================
-
-static long long azure_get_size(void *backend_data, const char *url)
-{
-	AzureBackendData *az = (AzureBackendData *)backend_data;
-	cloud_check_reinit_curl(&az->curl);
-	if (!az->curl) return -1;
-
-	struct curl_slist *headers = NULL;
-
-	char url_str[CLOUD_MAX_ENDPOINT_LEN + CLOUD_MAX_CRED_LEN + 16];
-	strncpy(url_str, az->endpoint, sizeof(url_str) - 1);
-	url_str[sizeof(url_str) - 1] = '\0';
+	AzureProviderData *az = (AzureProviderData *)pd;
 
 	if (az->sas_token[0])
 	{
-		char sep = (strchr(az->endpoint, '?') != NULL) ? '&' : '?';
-		snprintf(url_str, sizeof(url_str), "%s%c%s",
-			az->endpoint, sep, az->sas_token);
+		// SAS: the token travels in the query string
+		const char *tok = az->sas_token;
+		if (*tok == '?') tok++;
+		char sep = strchr(az->endpoint, '?') ? '&' : '?';
+		snprintf(req->url, sizeof(req->url), "%s%c%s", az->endpoint, sep, tok);
+		return 0;
 	}
-	else if (az->account_key_len > 0)
+
+	snprintf(req->url, sizeof(req->url), "%s", az->endpoint);
+	if (az->account_key_len > 0)
 	{
-		char auth_hdr[2048], date_hdr[128];
-		char resource_path[CLOUD_MAX_ENDPOINT_LEN];
-		snprintf(resource_path, sizeof(resource_path),
-			"/%s/%s", az->container, az->blob_name);
-		// sign as GET with Range: bytes=0-0 (must match the actual request)
-		azure_sign_request(az, "GET", resource_path, "bytes=0-0",
-			auth_hdr, sizeof(auth_hdr), date_hdr, sizeof(date_hdr));
-		headers = curl_slist_append(headers, auth_hdr);
-		headers = curl_slist_append(headers, date_hdr);
-		headers = curl_slist_append(headers, "x-ms-version: 2020-10-02");
+		struct tm utc;
+		cloud_utc_time(now, &utc);
+		char date_str[64];
+		strftime(date_str, sizeof(date_str), "%a, %d %b %Y %H:%M:%S GMT", &utc);
+
+		char auth_hdr[1024], date_hdr[128];
+		if (azure_sign_request(az, range_value, date_str,
+			auth_hdr, sizeof(auth_hdr)) != 0)
+		{
+			snprintf(err, err_size, "failed to sign the request");
+			return -1;
+		}
+		snprintf(date_hdr, sizeof(date_hdr), "x-ms-date: %s", date_str);
+		curl_request_add_header(req, auth_hdr);
+		curl_request_add_header(req, date_hdr);
+		curl_request_add_header(req, "x-ms-version: " AZURE_API_VERSION);
 	}
-	headers = curl_slist_append(headers, "Range: bytes=0-0");
-
-	// Collect the response body: 1 byte on success, XML error on failure.
-	unsigned char body_buf[4096];
-	AzureCurlBuffer body_cb;
-	body_cb.buf = body_buf;
-	body_cb.size = 0;
-	body_cb.capacity = (long long)sizeof(body_buf);
-
-	long long file_size = -1;
-
-	CloudTransfer tr;
-	curl_easy_reset(az->curl);
-	cloud_curl_setup(az->curl, &tr);
-	curl_easy_setopt(az->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
-	curl_easy_setopt(az->curl, CURLOPT_URL, url_str);
-	curl_easy_setopt(az->curl, CURLOPT_HTTPHEADER, headers);
-	curl_easy_setopt(az->curl, CURLOPT_WRITEFUNCTION, azure_curl_write_cb);
-	curl_easy_setopt(az->curl, CURLOPT_WRITEDATA, &body_cb);
-	curl_easy_setopt(az->curl, CURLOPT_HEADERFUNCTION, azure_getsize_header_cb);
-	curl_easy_setopt(az->curl, CURLOPT_HEADERDATA, &file_size);
-	curl_easy_setopt(az->curl, CURLOPT_NOSIGNAL, 1L);
-	curl_easy_setopt(az->curl, CURLOPT_FOLLOWLOCATION, 1L);
-
-	// perform the request, retrying transient failures with back-off
-	CURLcode res;
-	for (int attempt = 0; ; attempt++)
-	{
-		body_cb.size = 0;
-		file_size = -1;
-		res = curl_easy_perform(az->curl);
-		if (!cloud_should_retry(&tr, res, az->curl, attempt)) break;
-	}
-	curl_slist_free_all(headers);
-
-	if (cloud_transfer_interrupted(&tr, res, "Azure", az->last_error,
-		sizeof(az->last_error)))
-		return -1;
-
-	if (res != CURLE_OK)
-	{
-		cloud_format_error(az->last_error, sizeof(az->last_error),
-			"Azure", az->endpoint, res, 0, NULL, 0);
-		return -1;
-	}
-
-	long http_code = 0;
-	curl_easy_getinfo(az->curl, CURLINFO_RESPONSE_CODE, &http_code);
-	// 206 Partial Content for Range:0-0 success; 200 if the server ignored
-	// the Range header and returned the full body.
-	if (http_code != 200 && http_code != 206)
-	{
-		cloud_format_error(az->last_error, sizeof(az->last_error),
-			"Azure", az->endpoint, CURLE_OK, http_code,
-			body_cb.buf, body_cb.size);
-		return -1;
-	}
-
-	return file_size;
+	// otherwise: anonymous access (public container)
+	return 0;
 }
 
-
-// =====================================================================
-// Azure backend: close
-// =====================================================================
-
-static void azure_close(void *backend_data)
+static void azure_error_hint(void *pd, const CurlResponseInfo *info,
+	char *err, size_t err_size)
 {
-	AzureBackendData *az = (AzureBackendData *)backend_data;
-	if (az)
+	AzureProviderData *az = (AzureProviderData *)pd;
+	size_t cur = strlen(err);
+	if (cur + 1 >= err_size) return;
+	if ((info->http_code == 401 || info->http_code == 403 ||
+		info->http_code == 404) &&
+		!az->sas_token[0] && az->account_key_len == 0)
 	{
-		if (az->curl) curl_easy_cleanup(az->curl);
-		// zero out sensitive data
-		memset(az->account_key, 0, sizeof(az->account_key));
-		memset(az->sas_token, 0, sizeof(az->sas_token));
-		free(az);
+		snprintf(err + cur, err_size - cur,
+			" [Hint: no credentials are configured, so the request was sent "
+			"anonymously; see ?gdsCloudConfigAzure]");
 	}
 }
 
-
-// =====================================================================
-// Azure backend: create
-// =====================================================================
-
-/// Parse az://container/blob and resolve endpoint; on failure returns NULL
-/// and, when the cause is a bad credential, a message in `err`
-AzureBackendData *azure_backend_create(const char *az_url,
-	const char *account_name, const char *account_key,
-	const char *sas_token, char *err, size_t err_size)
+static const char *azure_endpoint(void *pd)
 {
-	if (err && err_size) err[0] = '\0';
-	// az://container/blob  (account from param or env)
-	if (strncmp(az_url, "az://", 5) != 0) return NULL;
-	const char *rest = az_url + 5;
+	return ((AzureProviderData *)pd)->endpoint;
+}
+
+static void azure_free(void *pd)
+{
+	AzureProviderData *az = (AzureProviderData *)pd;
+	if (!az) return;
+	memset(az->account_key, 0, sizeof(az->account_key));
+	memset(az->sas_token, 0, sizeof(az->sas_token));
+	free(az);
+}
+
+const CurlProvider azure_provider = {
+	.name       = "Azure",
+	.prepare    = azure_prepare,
+	.error_hint = azure_error_hint,
+	.endpoint   = azure_endpoint,
+	.free_data  = azure_free
+};
+
+
+// =====================================================================
+// Construction:
+//   az://container/blob -> https://<account>.blob.core.windows.net/container/blob
+// Returns NULL with a message in `err` on invalid input.
+// =====================================================================
+
+void *azure_provider_create(const char *url, const char *account_name,
+	const char *account_key, const char *sas_token,
+	char *err, size_t err_size)
+{
+	err[0] = '\0';
+	if (strncmp(url, "az://", 5) != 0)
+	{
+		snprintf(err, err_size, "must start with 'az://'");
+		return NULL;
+	}
+	const char *rest = url + 5;
 	const char *slash = strchr(rest, '/');
-	if (!slash) return NULL;
+	if (!slash || slash == rest || !slash[1])
+	{
+		snprintf(err, err_size,
+			"missing blob name (expected 'az://container/blob')");
+		return NULL;
+	}
+	if (!account_name || !account_name[0])
+	{
+		snprintf(err, err_size, "the Azure storage account name is required "
+			"(see ?gdsCloudConfigAzure or the AZURE_STORAGE_ACCOUNT "
+			"environment variable)");
+		return NULL;
+	}
+	char container[256];
+	size_t container_len = (size_t)(slash - rest);
+	if (container_len >= sizeof(container))
+	{
+		snprintf(err, err_size, "container name is too long");
+		return NULL;
+	}
+	memcpy(container, rest, container_len);
+	container[container_len] = '\0';
 
-	AzureBackendData *az = (AzureBackendData *)calloc(1, sizeof(AzureBackendData));
+	AzureProviderData *az = (AzureProviderData *)calloc(1, sizeof(AzureProviderData));
 	if (!az) return NULL;
 
-	// container
-	size_t container_len = (size_t)(slash - rest);
-	if (container_len >= sizeof(az->container))
-		container_len = sizeof(az->container) - 1;
-	strncpy(az->container, rest, container_len);
-
-	// blob name (after container/)
-	strncpy(az->blob_name, slash + 1, sizeof(az->blob_name) - 1);
-
-	// credentials
-	if (account_name && account_name[0])
-		strncpy(az->account_name, account_name, sizeof(az->account_name) - 1);
+	snprintf(az->account_name, sizeof(az->account_name), "%s", account_name);
+	if (sas_token && sas_token[0])
+		snprintf(az->sas_token, sizeof(az->sas_token), "%s", sas_token);
 	if (account_key && account_key[0])
 	{
 		// decode the base64 Shared Key once; real keys are 64 bytes
-		long n = base64_decode(account_key, az->account_key,
+		long n = cloud_base64_decode(account_key, az->account_key,
 			sizeof(az->account_key));
 		if (n <= 0)
 		{
-			if (err && err_size)
-			{
-				snprintf(err, err_size, "the Azure storage account key is "
-					"not valid base64 (or is too long)");
-			}
-			memset(az->account_key, 0, sizeof(az->account_key));
-			free(az);
+			snprintf(err, err_size, "the Azure storage account key is not "
+				"valid base64 (or is too long)");
+			azure_free(az);
 			return NULL;
 		}
 		az->account_key_len = (size_t)n;
 	}
-	if (sas_token && sas_token[0])
-		strncpy(az->sas_token, sas_token, sizeof(az->sas_token) - 1);
 
-	// endpoint
+	char encoded_blob[CLOUD_MAX_URL_LEN];
+	cloud_url_encode_path(slash + 1, encoded_blob, sizeof(encoded_blob));
 	snprintf(az->endpoint, sizeof(az->endpoint),
 		"https://%s.blob.core.windows.net/%s/%s",
-		az->account_name, az->container, az->blob_name);
-
-	az->curl = curl_easy_init();
-	if (!az->curl)
-	{
-		free(az);
-		return NULL;
-	}
-
+		account_name, container, encoded_blob);
+	snprintf(az->canonical_resource, sizeof(az->canonical_resource),
+		"/%s/%s/%s", account_name, container, encoded_blob);
 	return az;
 }
-
-
-// =====================================================================
-// Azure backend: get_last_error
-// =====================================================================
-
-static const char *azure_get_last_error(void *backend_data)
-{
-	AzureBackendData *az = (AzureBackendData *)backend_data;
-	return az ? az->last_error : "";
-}
-
-
-// =====================================================================
-// Azure backend vtable
-// =====================================================================
-
-CloudBackend azure_backend_vtable = {
-	.read_range     = azure_read_range,
-	.get_size       = azure_get_size,
-	.close          = azure_close,
-	.get_last_error = azure_get_last_error
-};
