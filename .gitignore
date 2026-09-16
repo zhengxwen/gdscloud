@@ -51,3 +51,6 @@ rsconnect/
 # other files
 *.o
 *.so
+
+# BiocCheck output
+*.BiocCheck/

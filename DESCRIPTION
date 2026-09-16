@@ -1,7 +1,7 @@
 Package: gdscloud
 Type: Package
 Title: Cloud Storage Access for GDS Files
-Version: 0.99.4
+Version: 0.99.5
 Authors@R: person("Xiuwen", "Zheng", role=c("aut", "cre"),
     email="zhengx@u.washington.edu",
     comment=c(ORCID="0000-0002-1390-0708"))
@@ -23,7 +23,7 @@ Depends: R (>= 4.5.0), gdsfmt (>= 1.49.7)
 Encoding: UTF-8
 LinkingTo: gdsfmt
 Suggests: BiocParallel, BiocStyle, keyring, knitr, rmarkdown, testthat,
-        SeqArray, httpuv, callr, openssl
+        SeqArray, httpuv, callr, openssl, withr
 VignetteBuilder: knitr
 License: LGPL-3
 SystemRequirements: libcurl (>= 7.28.0; >= 7.32.0 recommended), OpenSSL

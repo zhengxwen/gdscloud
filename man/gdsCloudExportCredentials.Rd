@@ -70,6 +70,9 @@ gdsCloudConfigS3(aws_access_key_id="AKID", aws_secret_access_key="secret")
 cl <- makeCluster(2L)
 gdsCloudExportCredentials(cl)
 stopCluster(cl)
+
+# forget the example credentials again
+gdsCloudConfigS3(aws_access_key_id="", aws_secret_access_key="")
 }
 }
 \keyword{GDS}

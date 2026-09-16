@@ -1,7 +1,7 @@
 ---
 title: "Cloud Storage Access for GDS Files"
 author: "Xiuwen Zheng"
-date: "2026-05-01"
+date: "2026-09-16"
 output:
     BiocStyle::html_document:
         toc: true
@@ -275,8 +275,10 @@ the login machinery of dedicated packages:
 
 ```{r auth-provider, eval=FALSE}
 # Google Cloud Storage via gargle, or via the gcloud CLI
-gdsCloudConfigGCS(access_token = function()
-    gargle::token_fetch(scopes = "https://www.googleapis.com/auth/devstorage.read_only")$credentials$access_token)
+gdsCloudConfigGCS(access_token = function() {
+    scope <- "https://www.googleapis.com/auth/devstorage.read_only"
+    gargle::token_fetch(scopes = scope)$credentials$access_token
+})
 gdsCloudConfigGCS(access_token = function()
     system2("gcloud", c("auth", "print-access-token"), stdout = TRUE))
 

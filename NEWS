@@ -51,6 +51,11 @@ NEW FEATURES
 
 USER-VISIBLE CHANGES
 
+    o Continuous integration: `R CMD check` and BiocCheck run on GitHub
+      Actions (Linux, macOS, Windows) for every push and pull request;
+      the tests use a local HTTP server (httpuv, callr) and need no
+      network or cloud account
+
     o The four backends now share one generic libcurl backend
       (src/curl_backend.c): transfers, Range validation, timeouts,
       retries, interrupts, size detection and error formatting are

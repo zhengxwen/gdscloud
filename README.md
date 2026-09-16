@@ -1,5 +1,7 @@
 # gdscloud: Cloud Storage Access for GDS Files
 
+[![R-CMD-check](https://github.com/zhengxwen/gdscloud/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/zhengxwen/gdscloud/actions/workflows/R-CMD-check.yml)
+
 GDS (Genomic Data Structure) is a high-performance file format for storing and accessing large-scale genomic data, implemented by the [gdsfmt](https://bioconductor.org/packages/gdsfmt) package. It supports hierarchical data organization with efficient random access and data compression.
 
 The `gdscloud` package extends `gdsfmt` to provide transparent read-only access
@@ -23,7 +25,7 @@ BiocManager::install("gdscloud")
 ## System Requirements
 
 - libcurl >= 7.28.0
-- gdsfmt >= 1.48.1
+- gdsfmt >= 1.49.7
 - Windows source builds require Rtools and `LIB_CURL` to point to the curl
     toolchain path used by [src/Makevars.win](src/Makevars.win).
 

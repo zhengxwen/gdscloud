@@ -184,8 +184,10 @@ gdsCloudConfigAzure(
 \dontrun{
 # Token provider functions: called every time a file is opened
 # Google Cloud Storage via gargle (user or service-account login)
-gdsCloudConfigGCS(access_token = function()
-    gargle::token_fetch(scopes = "https://www.googleapis.com/auth/devstorage.read_only")$credentials$access_token)
+gdsCloudConfigGCS(access_token = function() {
+    scope <- "https://www.googleapis.com/auth/devstorage.read_only"
+    gargle::token_fetch(scopes = scope)$credentials$access_token
+})
 
 # ... or via the gcloud CLI
 gdsCloudConfigGCS(access_token = function()

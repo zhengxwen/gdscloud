@@ -1,0 +1,67 @@
+# R CMD check on Linux, macOS and Windows.
+#
+# gdscloud needs gdsfmt >= 1.49.7, which is ahead of the Bioconductor
+# release, so gdsfmt is installed from GitHub; the remaining dependencies
+# come from CRAN/Bioconductor via pak. libcurl and OpenSSL are provided by
+# the system (Linux via SystemRequirements, macOS via Homebrew, Windows via
+# Rtools' pkg-config, see src/Makevars.win).
+
+name: R-CMD-check
+
+on:
+  push:
+    branches: [main, master, devel]
+  pull_request:
+    branches: [main, master, devel]
+  workflow_dispatch:
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.config.os }} (R ${{ matrix.config.r }})
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest,  r: 'release'}
+          - {os: macos-latest,   r: 'release'}
+          - {os: windows-latest, r: 'release'}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      NOT_CRAN: true
+      _R_CHECK_FORCE_SUGGESTS_: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          use-public-rspm: true
+
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: brew install openssl@3
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            github::zhengxwen/gdsfmt
+            any::rcmdcheck
+            any::BiocCheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual")'
+          error-on: '"warning"'
+          upload-snapshots: true
+
+      - name: BiocCheck
+        if: runner.os == 'Linux'
+        run: |
+          BiocCheck::BiocCheck(".", `quit-with-status` = FALSE,
+            `no-check-R-ver` = TRUE, `no-check-bioc-help` = TRUE)
+        shell: Rscript {0}

@@ -25,6 +25,8 @@ gdsCloudList()
 gdsCloudList()
 
 \donttest{
+# a public bucket, accessed anonymously (no credentials configured)
+gdsCloudConfigS3(aws_access_key_id="", aws_secret_access_key="")
 gds <- gdsCloudOpen("s3://gds-stat/download/hapmap/hapmap_r23a.gds")
 gdsCloudList()
 closefn.gds(gds)
