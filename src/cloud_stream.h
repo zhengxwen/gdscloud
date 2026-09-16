@@ -172,6 +172,35 @@ int cloud_range_check_verify(const CloudRangeCheck *rc, CURLcode res,
 
 
 // =====================================================================
+// Transfer setup shared by the backends: timeouts and user interrupts
+//
+// Without timeouts a stalled connection blocks R forever, and a plain
+// R_CheckUserInterrupt() from inside a transfer would longjmp through the
+// C++ frames of gdsfmt. cloud_curl_setup() installs a connect timeout, a
+// low-speed timeout and a progress callback that polls for a pending
+// interrupt (confined with R_ToplevelExec) and aborts the transfer;
+// cloud_transfer_interrupted() turns that abort into an error message.
+// =====================================================================
+
+typedef struct CloudTransfer {
+	int interrupted;             // set by the progress callback
+} CloudTransfer;
+
+/// Set the timeouts used by cloud_curl_setup() (seconds; <= 0 keeps the
+/// current value). `low_speed_time`: abort when < 1 byte/s for this long.
+void cloud_set_timeouts(long connect_timeout, long low_speed_time);
+
+/// Apply timeouts and the interrupt-checking progress callback to `curl`
+/// (call after curl_easy_reset() and before curl_easy_perform())
+void cloud_curl_setup(CURL *curl, CloudTransfer *tr);
+
+/// After curl_easy_perform(): if the transfer was aborted by a user
+/// interrupt, write a message into `err` and return 1; otherwise 0
+int cloud_transfer_interrupted(const CloudTransfer *tr, CURLcode res,
+	const char *prefix, char *err, size_t err_size);
+
+
+// =====================================================================
 // Block cache API (internal)
 // =====================================================================
 

@@ -24,6 +24,8 @@
             \code{\link{gdsCloudConfigHTTP}}: configure credentials.
         \item \code{\link{gdsCloudExportCredentials}}: propagate credentials
             to parallel workers.
+        \item \code{\link{gdsCloudOptions}}: timeouts and the default
+            cache size.
         \item \code{\link{gdsCloudCacheSize}}, \code{\link{gdsCloudList}}:
             control the block cache and inspect open cloud streams.
     }

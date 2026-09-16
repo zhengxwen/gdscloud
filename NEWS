@@ -1,6 +1,22 @@
 CHANGES IN VERSION 0.99.5
 -------------------------
 
+NEW FEATURES
+
+    o Cloud requests now have a connect timeout (30 s) and a low-speed
+      timeout (60 s below 1 byte/s), so a stalled connection no longer
+      blocks R indefinitely
+
+    o New `gdsCloudOptions()` to get or set the package options in one
+      place: `connect_timeout`, `timeout` and `cache_size`. The initial
+      values can be set via the R options `gdscloud.connect_timeout`,
+      `gdscloud.timeout`, `gdscloud.cache_size_mb` or the corresponding
+      GDSCLOUD_* environment variables; `gdsCloudExportCredentials()`
+      copies the options to the workers as well
+
+    o Transfers can be interrupted with Ctrl-C; the interrupt is detected
+      from libcurl's progress callback and reported as an error
+
 BUG FIXES
 
     o Range reads now verify the server's response: a server that ignores

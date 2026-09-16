@@ -320,6 +320,9 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
     url_tbl <- .gdscloud_env$url_credentials
     if (length(url_tbl))
         ans$url_credentials <- url_tbl
+    # package options (timeouts, cache size), so workers behave alike
+    ans$options <- .gdscloud_env$options
+    ans$cache_size_mb <- .gdscloud_env$cache_size_mb
     ans
 }
 

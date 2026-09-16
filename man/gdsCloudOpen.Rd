@@ -31,10 +31,16 @@ gdsCloudOpen(url)
     When the \code{gdscloud} package is loaded, \code{openfn.gds()} from
     the \code{gdsfmt} package automatically detects cloud URLs and delegates
     to this function.
+
+    Every request has a connect timeout (default 30 seconds) and a
+    low-speed timeout: a transfer that moves less than one byte per second
+    for the timeout period (default 60 seconds) is aborted with an error.
+    Both can be changed with \code{\link{gdsCloudOptions}}. A transfer can
+    be interrupted with Ctrl-C (or Esc in RStudio), which raises an error.
 }
 \seealso{
     \code{\link{gdsCloudConfigS3}}, \code{\link{gdsCloudConfigHTTP}},
-    \code{\link{gdsCloudCacheSize}},
+    \code{\link{gdsCloudOptions}}, \code{\link{gdsCloudCacheSize}},
     \code{\link[gdsfmt]{openfn.gds}}, \code{\link[gdsfmt]{closefn.gds}}
 }
 \examples{

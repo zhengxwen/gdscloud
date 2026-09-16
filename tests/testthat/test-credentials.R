@@ -68,6 +68,12 @@ test_that("gdsCloudExportCredentials pushes credentials to a PSOCK cluster", {
     })[[1L]]
     expect_equal(got,
         c("export_test_key", "export_test_secret", "eu-west-1"))
+    # the package options travel with the credentials
+    gdsCloudOptions(timeout = 123)
+    on.exit(gdsCloudOptions(timeout = 60), add = TRUE)
+    expect_true(gdsCloudExportCredentials(cl))
+    got <- parallel::clusterEvalQ(cl, gdscloud::gdsCloudOptions()$timeout)[[1L]]
+    expect_equal(got, 123)
 })
 
 

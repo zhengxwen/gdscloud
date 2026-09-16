@@ -270,7 +270,9 @@ static long long s3_read_range(void *backend_data, const char *url,
 	CloudRangeCheck rc;
 	cloud_range_check_init(&rc, offset);
 
+	CloudTransfer tr;
 	curl_easy_reset(s3->curl);
+	cloud_curl_setup(s3->curl, &tr);
 	curl_easy_setopt(s3->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(s3->curl, CURLOPT_URL, s3->endpoint);
 	curl_easy_setopt(s3->curl, CURLOPT_HTTPHEADER, headers);
@@ -283,6 +285,10 @@ static long long s3_read_range(void *backend_data, const char *url,
 
 	CURLcode res = curl_easy_perform(s3->curl);
 	curl_slist_free_all(headers);
+
+	if (cloud_transfer_interrupted(&tr, res, "S3", s3->last_error,
+		sizeof(s3->last_error)))
+		return -1;
 
 	// reject responses that do not cover the requested range
 	if (cloud_range_check_verify(&rc, res, "S3", s3->endpoint, offset, length,
@@ -449,7 +455,9 @@ static long long s3_get_size(void *backend_data, const char *url)
 	info.bucket_region[0] = '\0';
 	info.request_id[0] = '\0';
 
+	CloudTransfer tr;
 	curl_easy_reset(s3->curl);
+	cloud_curl_setup(s3->curl, &tr);
 	curl_easy_setopt(s3->curl, CURLOPT_USERAGENT, GDSCLOUD_USER_AGENT);
 	curl_easy_setopt(s3->curl, CURLOPT_URL, s3->endpoint);
 	curl_easy_setopt(s3->curl, CURLOPT_HTTPHEADER, headers);
@@ -462,6 +470,10 @@ static long long s3_get_size(void *backend_data, const char *url)
 
 	CURLcode res = curl_easy_perform(s3->curl);
 	curl_slist_free_all(headers);
+
+	if (cloud_transfer_interrupted(&tr, res, "S3", s3->last_error,
+		sizeof(s3->last_error)))
+		return -1;
 
 	if (res != CURLE_OK)
 	{

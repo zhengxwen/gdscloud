@@ -23,16 +23,8 @@
 
 .onLoad <- function(libname, pkgname)
 {
-    # default cache size (MB); overridable via the option
-    # 'gdscloud.cache_size_mb' or the environment variable
-    # GDSCLOUD_CACHE_SIZE_MB so it can persist across sessions
-    # (e.g. in .Rprofile / .Renviron)
-    raw <- getOption("gdscloud.cache_size_mb",
-        Sys.getenv("GDSCLOUD_CACHE_SIZE_MB", "64"))
-    sz <- if (is.numeric(raw)) raw
-        else if (grepl("^[0-9.]+$", raw)) as.numeric(raw) else NA_real_
-    .gdscloud_env$cache_size_mb <-
-        if (length(sz) == 1L && !is.na(sz) && sz > 0) sz else 64L
+    # timeouts and cache size (see ?gdsCloudOptions)
+    .init_options()
 
     # registry of URL-specific credential entries (longest-prefix match)
     .gdscloud_env$url_credentials <- list()

@@ -64,10 +64,76 @@ gdsCloudSchemes <- function()
 
 
 #############################################################
+# Get or set the package options (timeouts, cache size)
+#
+gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
+    cache_size=NULL)
+{
+    opt <- .gdscloud_env$options
+    check_pos <- function(v, name)
+    {
+        if (!is.numeric(v) || length(v) != 1L || is.na(v) || v <= 0)
+            stop("'", name, "' must be a single positive number.", call.=FALSE)
+        as.numeric(v)
+    }
+    if (!is.null(connect_timeout))
+        opt$connect_timeout <- check_pos(connect_timeout, "connect_timeout")
+    if (!is.null(timeout))
+        opt$timeout <- check_pos(timeout, "timeout")
+    if (!is.null(cache_size))
+    {
+        opt$cache_size <- check_pos(cache_size, "cache_size")
+        .gdscloud_env$cache_size_mb <- opt$cache_size
+    }
+    .gdscloud_env$options <- opt
+    if (is.null(connect_timeout) && is.null(timeout) && is.null(cache_size))
+        opt
+    else
+        invisible(opt)
+}
+
+
+#############################################################
+# Internal: initialize the options at load time. Defaults can be
+# overridden persistently via R options ('gdscloud.<name>') or the
+# environment variables GDSCLOUD_<NAME>, e.g. in .Rprofile / .Renviron
+#
+.init_options <- function()
+{
+    get_num <- function(name, default)
+    {
+        raw <- getOption(paste0("gdscloud.", name),
+            Sys.getenv(paste0("GDSCLOUD_", toupper(name)), ""))
+        v <- suppressWarnings(as.numeric(raw))
+        if (length(v) == 1L && !is.na(v) && v > 0) v else default
+    }
+    .gdscloud_env$options <- list(
+        connect_timeout = get_num("connect_timeout", 30),
+        timeout         = get_num("timeout", 60),
+        cache_size      = get_num("cache_size_mb", 64)
+    )
+    .gdscloud_env$cache_size_mb <- .gdscloud_env$options$cache_size
+    invisible()
+}
+
+
+#############################################################
+# Internal: push the transfer timeouts (seconds) to the C code
+#
+.apply_timeouts <- function()
+{
+    opt <- .gdscloud_env$options
+    .Call(gdscloud_set_timeouts, opt$connect_timeout, opt$timeout)
+    invisible()
+}
+
+
+#############################################################
 # Internal: open from HTTP/HTTPS
 #
 .open_http <- function(url, ...)
 {
+    .apply_timeouts()
     cred <- .get_http_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Build auth header string (e.g. "Bearer <token>")
@@ -84,6 +150,7 @@ gdsCloudSchemes <- function()
 #
 .open_s3 <- function(url, ...)
 {
+    .apply_timeouts()
     # get credentials (URL-specific entry takes priority)
     cred <- .get_s3_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
@@ -99,6 +166,7 @@ gdsCloudSchemes <- function()
 #
 .open_gcs <- function(url, ...)
 {
+    .apply_timeouts()
     cred <- .get_gcs_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
@@ -111,6 +179,7 @@ gdsCloudSchemes <- function()
 #
 .open_azure <- function(url, ...)
 {
+    .apply_timeouts()
     cred <- .get_azure_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size

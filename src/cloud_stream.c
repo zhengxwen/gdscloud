@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#include <R.h>
+#include <Rinternals.h>
+
 #ifdef _WIN32
 #ifndef strncasecmp
 #define strncasecmp _strnicmp
@@ -247,6 +250,81 @@ void cloud_format_error(char *out, size_t out_size,
 		snprintf(out, out_size, "%s: HTTP %ld accessing '%s'",
 			prefix, http_code, endpoint);
 	}
+}
+
+
+// =====================================================================
+// Transfer setup: timeouts and user interrupts
+// =====================================================================
+
+static long g_connect_timeout = 30;   // seconds
+static long g_low_speed_time = 60;    // seconds below 1 byte/s before abort
+
+void cloud_set_timeouts(long connect_timeout, long low_speed_time)
+{
+	if (connect_timeout > 0) g_connect_timeout = connect_timeout;
+	if (low_speed_time > 0) g_low_speed_time = low_speed_time;
+}
+
+static void check_interrupt_fn(void *dummy)
+{
+	(void)dummy;
+	R_CheckUserInterrupt();
+}
+
+/// 1 if an interrupt is pending. R_CheckUserInterrupt() would longjmp to
+/// the top level; running it under R_ToplevelExec() confines the jump so
+/// the transfer can be aborted and unwound through the normal error path.
+static int pending_interrupt(void)
+{
+	return !R_ToplevelExec(check_interrupt_fn, NULL);
+}
+
+#if LIBCURL_VERSION_NUM >= 0x072000
+static int xferinfo_cb(void *clientp, curl_off_t dltotal, curl_off_t dlnow,
+	curl_off_t ultotal, curl_off_t ulnow)
+{
+	(void)dltotal; (void)dlnow; (void)ultotal; (void)ulnow;
+#else
+static int xferinfo_cb(void *clientp, double dltotal, double dlnow,
+	double ultotal, double ulnow)
+{
+	(void)dltotal; (void)dlnow; (void)ultotal; (void)ulnow;
+#endif
+	CloudTransfer *tr = (CloudTransfer *)clientp;
+	if (pending_interrupt())
+	{
+		tr->interrupted = 1;
+		return 1;   // non-zero aborts the transfer
+	}
+	return 0;
+}
+
+void cloud_curl_setup(CURL *curl, CloudTransfer *tr)
+{
+	tr->interrupted = 0;
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, g_connect_timeout);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+	curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, g_low_speed_time);
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+#if LIBCURL_VERSION_NUM >= 0x072000
+	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo_cb);
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, tr);
+#else
+	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, xferinfo_cb);
+	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, tr);
+#endif
+}
+
+int cloud_transfer_interrupted(const CloudTransfer *tr, CURLcode res,
+	const char *prefix, char *err, size_t err_size)
+{
+	if (res == CURLE_ABORTED_BY_CALLBACK && tr->interrupted)
+	{
+		snprintf(err, err_size, "%s: transfer interrupted by the user", prefix);
+		return 1;
+	}
+	return 0;
 }
 
 

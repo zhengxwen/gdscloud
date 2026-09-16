@@ -26,7 +26,7 @@ Suggests: BiocParallel, BiocStyle, keyring, knitr, rmarkdown, testthat,
         SeqArray, httpuv, callr
 VignetteBuilder: knitr
 License: LGPL-3
-SystemRequirements: libcurl (>= 7.28.0), OpenSSL
+SystemRequirements: libcurl (>= 7.28.0; >= 7.32.0 recommended), OpenSSL
 URL: https://github.com/zhengxwen/gdscloud
 BugReports: https://github.com/zhengxwen/gdscloud/issues
 biocViews: Infrastructure, DataImport

@@ -456,6 +456,20 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 
 
 // =====================================================================
+// .Call: Set the transfer timeouts (seconds) used for all cloud requests
+// =====================================================================
+
+extern "C" SEXP gdscloud_set_timeouts(SEXP connect_timeout, SEXP timeout)
+{
+	double ct = Rf_asReal(connect_timeout), lt = Rf_asReal(timeout);
+	cloud_set_timeouts(
+		(R_FINITE(ct) && ct > 0) ? (long)ct : 0,
+		(R_FINITE(lt) && lt > 0) ? (long)lt : 0);
+	return R_NilValue;
+}
+
+
+// =====================================================================
 // .Call: Clear cache (placeholder - individual stream caches are
 //        freed when streams close; this is a no-op for now)
 // =====================================================================
