@@ -456,15 +456,18 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 
 
 // =====================================================================
-// .Call: Set the transfer timeouts (seconds) used for all cloud requests
+// .Call: Set the transfer options (timeouts in seconds, max retries)
 // =====================================================================
 
-extern "C" SEXP gdscloud_set_timeouts(SEXP connect_timeout, SEXP timeout)
+extern "C" SEXP gdscloud_set_options(SEXP connect_timeout, SEXP timeout,
+	SEXP max_retries)
 {
 	double ct = Rf_asReal(connect_timeout), lt = Rf_asReal(timeout);
+	double mr = Rf_asReal(max_retries);
 	cloud_set_timeouts(
 		(R_FINITE(ct) && ct > 0) ? (long)ct : 0,
 		(R_FINITE(lt) && lt > 0) ? (long)lt : 0);
+	cloud_set_max_retries((R_FINITE(mr) && mr >= 0) ? (int)mr : -1);
 	return R_NilValue;
 }
 
@@ -495,16 +498,18 @@ extern "C" SEXP gdscloud_cache_info(void)
 		total_misses += g_open_streams[i]->cache.total_misses;
 	}
 
-	SEXP ans = PROTECT(Rf_allocVector(VECSXP, 3));
-	SEXP names = PROTECT(Rf_allocVector(STRSXP, 3));
+	SEXP ans = PROTECT(Rf_allocVector(VECSXP, 4));
+	SEXP names = PROTECT(Rf_allocVector(STRSXP, 4));
 	SET_STRING_ELT(names, 0, Rf_mkChar("num_streams"));
 	SET_STRING_ELT(names, 1, Rf_mkChar("hits"));
 	SET_STRING_ELT(names, 2, Rf_mkChar("misses"));
+	SET_STRING_ELT(names, 3, Rf_mkChar("retries"));
 	Rf_setAttrib(ans, R_NamesSymbol, names);
 
 	SET_VECTOR_ELT(ans, 0, Rf_ScalarInteger((int)g_open_streams.size()));
 	SET_VECTOR_ELT(ans, 1, Rf_ScalarReal((double)total_hits));
 	SET_VECTOR_ELT(ans, 2, Rf_ScalarReal((double)total_misses));
+	SET_VECTOR_ELT(ans, 3, Rf_ScalarReal((double)cloud_total_retries()));
 
 	UNPROTECT(2);
 	return ans;

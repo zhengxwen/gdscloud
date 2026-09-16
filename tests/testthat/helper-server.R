@@ -6,9 +6,11 @@
 #   /data/<f>          proper HTTP Range support (206 + Content-Range)
 #   /norange/<f>       ignores Range: always 200 with the whole file
 #   /badrange/<f>      206 whose Content-Range start is always 0
+#   /flaky/<f>         503 on two out of every three requests, else /data
 
 .test_server_app <- function(dir)
 {
+    counter <- 0L
     resp <- function(status, body, headers = list())
     {
         if (is.character(body)) body <- charToRaw(body)
@@ -46,6 +48,7 @@
     }
     function(req)
     {
+        counter <<- counter + 1L
         p <- req$PATH_INFO
         if (p == "/__ping") return(resp(200L, "ok"))
         parts <- strsplit(sub("^/", "", p), "/", fixed = TRUE)[[1L]]
@@ -53,6 +56,13 @@
         mode <- parts[1L]; fname <- parts[2L]
         if (mode %in% c("data", "norange", "badrange"))
             serve(req, fname, mode)
+        else if (mode == "flaky")
+        {
+            if (counter %% 3L != 0L)
+                resp(503L, "<Error><Code>SlowDown</Code></Error>")
+            else
+                serve(req, fname, "data")
+        }
         else
             resp(404L, "not found")
     }

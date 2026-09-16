@@ -25,7 +25,10 @@ gdsCloudCacheInfo(verbose=TRUE)
 
     \code{gdsCloudCacheClear} frees cached data.
 
-    \code{gdsCloudCacheInfo} prints cache statistics.
+    \code{gdsCloudCacheInfo} prints cache statistics: the number of open
+    cloud streams, cache hits and misses summed over the open streams, and
+    the number of requests that were retried after a transient failure
+    (see \code{\link{gdsCloudOptions}}).
 }
 \value{
     \code{gdsCloudCacheSize}: the new cache size (invisible).

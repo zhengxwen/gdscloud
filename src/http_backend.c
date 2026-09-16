@@ -148,7 +148,15 @@ static long long http_read_range(void *backend_data, const char *url,
 	curl_easy_setopt(http->curl, CURLOPT_HEADERFUNCTION, cloud_range_check_header_cb);
 	curl_easy_setopt(http->curl, CURLOPT_HEADERDATA, &rc);
 
-	CURLcode res = curl_easy_perform(http->curl);
+	// perform the request, retrying transient failures with back-off
+	CURLcode res;
+	for (int attempt = 0; ; attempt++)
+	{
+		cb.size = 0;
+		cloud_range_check_init(&rc, offset);
+		res = curl_easy_perform(http->curl);
+		if (!cloud_should_retry(&tr, res, http->curl, attempt)) break;
+	}
 	curl_slist_free_all(headers);
 
 	if (cloud_transfer_interrupted(&tr, res, "HTTP", http->last_error,
@@ -225,7 +233,15 @@ static long long http_get_size(void *backend_data, const char *url)
 	curl_easy_setopt(http->curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(http->curl, CURLOPT_FOLLOWLOCATION, 1L);
 
-	CURLcode res = curl_easy_perform(http->curl);
+	// perform the request, retrying transient failures with back-off
+	CURLcode res;
+	for (int attempt = 0; ; attempt++)
+	{
+		body_cb.size = 0;
+		file_size = -1;
+		res = curl_easy_perform(http->curl);
+		if (!cloud_should_retry(&tr, res, http->curl, attempt)) break;
+	}
 	curl_slist_free_all(headers);
 
 	if (cloud_transfer_interrupted(&tr, res, "HTTP", http->last_error,

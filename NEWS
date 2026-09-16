@@ -8,7 +8,8 @@ NEW FEATURES
       blocks R indefinitely
 
     o New `gdsCloudOptions()` to get or set the package options in one
-      place: `connect_timeout`, `timeout` and `cache_size`. The initial
+      place: `connect_timeout`, `timeout`, `max_retries` and `cache_size`.
+      The initial
       values can be set via the R options `gdscloud.connect_timeout`,
       `gdscloud.timeout`, `gdscloud.cache_size_mb` or the corresponding
       GDSCLOUD_* environment variables; `gdsCloudExportCredentials()`
@@ -16,6 +17,11 @@ NEW FEATURES
 
     o Transfers can be interrupted with Ctrl-C; the interrupt is detected
       from libcurl's progress callback and reported as an error
+
+    o Transient failures (connection resets, timeouts, HTTP 408/429/5xx)
+      are retried with exponential back-off, by default up to 3 times;
+      `gdsCloudOptions(max_retries=)` controls this and
+      `gdsCloudCacheInfo()` reports the number of retried requests
 
 BUG FIXES
 

@@ -19,11 +19,13 @@
 #include <Rinternals.h>
 
 #ifdef _WIN32
+#include <windows.h>
 #ifndef strncasecmp
 #define strncasecmp _strnicmp
 #endif
 #else
 #include <strings.h>
+#include <unistd.h>
 #endif
 
 
@@ -319,12 +321,109 @@ void cloud_curl_setup(CURL *curl, CloudTransfer *tr)
 int cloud_transfer_interrupted(const CloudTransfer *tr, CURLcode res,
 	const char *prefix, char *err, size_t err_size)
 {
-	if (res == CURLE_ABORTED_BY_CALLBACK && tr->interrupted)
+	(void)res;
+	if (tr->interrupted)
 	{
 		snprintf(err, err_size, "%s: transfer interrupted by the user", prefix);
 		return 1;
 	}
 	return 0;
+}
+
+
+// =====================================================================
+// Retries with exponential back-off
+// =====================================================================
+
+static int g_max_retries = 3;
+static long long g_total_retries = 0;
+
+void cloud_set_max_retries(int max_retries)
+{
+	if (max_retries >= 0) g_max_retries = max_retries;
+}
+
+long long cloud_total_retries(void)
+{
+	return g_total_retries;
+}
+
+static int curl_error_is_transient(CURLcode res)
+{
+	switch (res)
+	{
+		case CURLE_COULDNT_CONNECT:
+		case CURLE_OPERATION_TIMEDOUT:
+		case CURLE_SSL_CONNECT_ERROR:
+		case CURLE_SEND_ERROR:
+		case CURLE_RECV_ERROR:
+		case CURLE_PARTIAL_FILE:
+		case CURLE_GOT_NOTHING:
+#ifdef CURLE_HTTP2
+		case CURLE_HTTP2:
+#endif
+#ifdef CURLE_HTTP2_STREAM
+		case CURLE_HTTP2_STREAM:
+#endif
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+static int http_status_is_transient(long code)
+{
+	return code == 408 || code == 429 || code == 500 || code == 502 ||
+		code == 503 || code == 504;
+}
+
+static void sleep_ms(int ms)
+{
+#ifdef _WIN32
+	Sleep((DWORD)ms);
+#else
+	usleep((useconds_t)ms * 1000);
+#endif
+}
+
+/// sleep for `ms` milliseconds in small steps; return 1 if interrupted
+static int interruptible_sleep(int ms)
+{
+	while (ms > 0)
+	{
+		int step = (ms < 100) ? ms : 100;
+		sleep_ms(step);
+		ms -= step;
+		if (pending_interrupt()) return 1;
+	}
+	return 0;
+}
+
+int cloud_should_retry(CloudTransfer *tr, CURLcode res, CURL *curl,
+	int attempt)
+{
+	if (tr->interrupted || attempt >= g_max_retries) return 0;
+
+	int transient;
+	if (res != CURLE_OK)
+	{
+		transient = curl_error_is_transient(res);
+	} else {
+		long http_code = 0;
+		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+		transient = http_status_is_transient(http_code);
+	}
+	if (!transient) return 0;
+
+	// 0.5 s, 1 s, 2 s, 4 s, 8 s, 8 s, ...
+	int backoff_ms = 500 << ((attempt < 4) ? attempt : 4);
+	if (interruptible_sleep(backoff_ms))
+	{
+		tr->interrupted = 1;
+		return 0;
+	}
+	g_total_retries++;
+	return 1;
 }
 
 

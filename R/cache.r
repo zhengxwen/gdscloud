@@ -55,6 +55,7 @@ gdsCloudCacheInfo <- function(verbose=TRUE)
             cat("  Open cloud streams:", info$num_streams, "\n")
             cat("  Global cache hits:", info$hits, "\n")
             cat("  Global cache misses:", info$misses, "\n")
+            cat("  Retried requests:", info$retries, "\n")
         }
     }
     invisible(info)

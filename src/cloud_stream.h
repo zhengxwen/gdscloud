@@ -183,19 +183,36 @@ int cloud_range_check_verify(const CloudRangeCheck *rc, CURLcode res,
 // =====================================================================
 
 typedef struct CloudTransfer {
-	int interrupted;             // set by the progress callback
+	int interrupted;             // set by the progress callback / back-off sleep
 } CloudTransfer;
 
 /// Set the timeouts used by cloud_curl_setup() (seconds; <= 0 keeps the
 /// current value). `low_speed_time`: abort when < 1 byte/s for this long.
 void cloud_set_timeouts(long connect_timeout, long low_speed_time);
 
+/// Set the maximum number of retries for transient failures (< 0 keeps
+/// the current value; 0 disables retrying)
+void cloud_set_max_retries(int max_retries);
+
+/// Total number of retried requests since the package was loaded
+long long cloud_total_retries(void);
+
+/// Retry decision after one curl_easy_perform(). Transient failures
+/// (connection reset, timeout, HTTP 408/429/5xx) are retried with
+/// exponential back-off (0.5 s doubling up to 8 s), at most the configured
+/// number of times. Returns 1 if the caller should perform the request
+/// again (the back-off sleep has already happened), 0 to stop. The sleep
+/// is interruptible; on interrupt `tr->interrupted` is set and 0 returned.
+int cloud_should_retry(CloudTransfer *tr, CURLcode res, CURL *curl,
+	int attempt);
+
 /// Apply timeouts and the interrupt-checking progress callback to `curl`
 /// (call after curl_easy_reset() and before curl_easy_perform())
 void cloud_curl_setup(CURL *curl, CloudTransfer *tr);
 
-/// After curl_easy_perform(): if the transfer was aborted by a user
-/// interrupt, write a message into `err` and return 1; otherwise 0
+/// After the transfer: if it was aborted by a user interrupt (during the
+/// transfer or a back-off sleep), write a message into `err` and return 1;
+/// otherwise 0
 int cloud_transfer_interrupted(const CloudTransfer *tr, CURLcode res,
 	const char *prefix, char *err, size_t err_size);
 

@@ -67,26 +67,32 @@ gdsCloudSchemes <- function()
 # Get or set the package options (timeouts, cache size)
 #
 gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
-    cache_size=NULL)
+    max_retries=NULL, cache_size=NULL)
 {
     opt <- .gdscloud_env$options
-    check_pos <- function(v, name)
+    check_num <- function(v, name, min)
     {
-        if (!is.numeric(v) || length(v) != 1L || is.na(v) || v <= 0)
-            stop("'", name, "' must be a single positive number.", call.=FALSE)
+        if (!is.numeric(v) || length(v) != 1L || is.na(v) || v < min)
+        {
+            stop("'", name, "' must be a single number >= ", min, ".",
+                call.=FALSE)
+        }
         as.numeric(v)
     }
     if (!is.null(connect_timeout))
-        opt$connect_timeout <- check_pos(connect_timeout, "connect_timeout")
+        opt$connect_timeout <- check_num(connect_timeout, "connect_timeout", 1)
     if (!is.null(timeout))
-        opt$timeout <- check_pos(timeout, "timeout")
+        opt$timeout <- check_num(timeout, "timeout", 1)
+    if (!is.null(max_retries))
+        opt$max_retries <- as.integer(check_num(max_retries, "max_retries", 0))
     if (!is.null(cache_size))
     {
-        opt$cache_size <- check_pos(cache_size, "cache_size")
+        opt$cache_size <- check_num(cache_size, "cache_size", 1)
         .gdscloud_env$cache_size_mb <- opt$cache_size
     }
     .gdscloud_env$options <- opt
-    if (is.null(connect_timeout) && is.null(timeout) && is.null(cache_size))
+    if (is.null(connect_timeout) && is.null(timeout) &&
+        is.null(max_retries) && is.null(cache_size))
         opt
     else
         invisible(opt)
@@ -100,16 +106,17 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
 #
 .init_options <- function()
 {
-    get_num <- function(name, default)
+    get_num <- function(name, default, min=1)
     {
         raw <- getOption(paste0("gdscloud.", name),
             Sys.getenv(paste0("GDSCLOUD_", toupper(name)), ""))
         v <- suppressWarnings(as.numeric(raw))
-        if (length(v) == 1L && !is.na(v) && v > 0) v else default
+        if (length(v) == 1L && !is.na(v) && v >= min) v else default
     }
     .gdscloud_env$options <- list(
         connect_timeout = get_num("connect_timeout", 30),
         timeout         = get_num("timeout", 60),
+        max_retries     = as.integer(get_num("max_retries", 3, min=0)),
         cache_size      = get_num("cache_size_mb", 64)
     )
     .gdscloud_env$cache_size_mb <- .gdscloud_env$options$cache_size
@@ -118,12 +125,13 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
 
 
 #############################################################
-# Internal: push the transfer timeouts (seconds) to the C code
+# Internal: push the transfer options (timeouts, retries) to the C code
 #
-.apply_timeouts <- function()
+.apply_options <- function()
 {
     opt <- .gdscloud_env$options
-    .Call(gdscloud_set_timeouts, opt$connect_timeout, opt$timeout)
+    .Call(gdscloud_set_options, opt$connect_timeout, opt$timeout,
+        opt$max_retries)
     invisible()
 }
 
@@ -133,7 +141,7 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
 #
 .open_http <- function(url, ...)
 {
-    .apply_timeouts()
+    .apply_options()
     cred <- .get_http_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Build auth header string (e.g. "Bearer <token>")
@@ -150,7 +158,7 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
 #
 .open_s3 <- function(url, ...)
 {
-    .apply_timeouts()
+    .apply_options()
     # get credentials (URL-specific entry takes priority)
     cred <- .get_s3_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
@@ -166,7 +174,7 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
 #
 .open_gcs <- function(url, ...)
 {
-    .apply_timeouts()
+    .apply_options()
     cred <- .get_gcs_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
@@ -179,7 +187,7 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
 #
 .open_azure <- function(url, ...)
 {
-    .apply_timeouts()
+    .apply_options()
     cred <- .get_azure_credentials(url)
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size

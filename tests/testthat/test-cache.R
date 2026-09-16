@@ -18,13 +18,16 @@ test_that("gdsCloudCacheClear runs without error", {
 
 test_that("gdsCloudCacheInfo returns a list", {
     info <- gdsCloudCacheInfo(verbose=FALSE)
-    expect_true(is.list(info) || is.null(info))
+    expect_type(info, "list")
+    expect_named(info, c("num_streams", "hits", "misses", "retries"))
 })
 
 test_that("gdsCloudOptions gets and sets the options", {
     old <- gdsCloudOptions()
     on.exit(do.call(gdsCloudOptions, old), add = TRUE)
-    expect_named(old, c("connect_timeout", "timeout", "cache_size"))
+    expect_named(old, c("connect_timeout", "timeout", "max_retries",
+        "cache_size"))
+    expect_equal(old$max_retries, 3L)
     expect_equal(old$connect_timeout, 30)
     expect_equal(old$timeout, 60)
 
@@ -41,7 +44,11 @@ test_that("gdsCloudOptions gets and sets the options", {
     gdsCloudCacheSize(32)
     expect_equal(gdsCloudOptions()$cache_size, 32)
 
-    expect_error(gdsCloudOptions(timeout = -1), "positive")
-    expect_error(gdsCloudOptions(connect_timeout = "a"), "positive")
-    expect_error(gdsCloudOptions(cache_size = c(1, 2)), "positive")
+    gdsCloudOptions(max_retries = 0)
+    expect_equal(gdsCloudOptions()$max_retries, 0L)
+
+    expect_error(gdsCloudOptions(timeout = -1), ">= 1")
+    expect_error(gdsCloudOptions(connect_timeout = "a"), ">= 1")
+    expect_error(gdsCloudOptions(max_retries = -1), ">= 0")
+    expect_error(gdsCloudOptions(cache_size = c(1, 2)), ">= 1")
 })
