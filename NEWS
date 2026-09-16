@@ -9,6 +9,13 @@ NEW FEATURES
       Ceph RGW, Cloudflare R2, Wasabi, Backblaze B2, DigitalOcean Spaces
       and other services implementing the S3 API
 
+    o Azure: `gdsCloudConfigAzure()` gains `access_token=` (OAuth2 /
+      Microsoft Entra ID), `endpoint_suffix=` (sovereign clouds such as
+      Azure China or Azure Government) and `endpoint=` (Azurite emulator
+      or any self-hosted blob endpoint); the corresponding
+      AZURE_STORAGE_* environment variables and the fields of
+      AZURE_STORAGE_CONNECTION_STRING are read as fallbacks
+
     o Cloud requests now have a connect timeout (30 s) and a low-speed
       timeout (60 s below 1 byte/s), so a stalled connection no longer
       blocks R indefinitely

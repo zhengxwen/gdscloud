@@ -237,6 +237,26 @@ gdsCloudConfigAzure(
 )
 ```
 
+An OAuth2 access token from Microsoft Entra ID (for example from
+`az account get-access-token --resource https://storage.azure.com/`, or a
+managed identity) can be used instead of a key or SAS token, and sovereign
+clouds or local emulators are reached through `endpoint_suffix` or a full
+`endpoint`:
+
+```{r auth-azure-token}
+gdsCloudConfigAzure(
+    account_name = "mystorageaccount",
+    access_token = "eyJ0eXAiOiJKV1QiLCJhbGci...",
+    endpoint_suffix = "blob.core.chinacloudapi.cn"   # Azure China
+)
+# Azurite emulator
+gdsCloudConfigAzure(
+    account_name = "devstoreaccount1",
+    account_key = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==",
+    endpoint = "http://127.0.0.1:10000/devstoreaccount1"
+)
+```
+
 Then open:
 
 ```{r open-azure, eval=FALSE}

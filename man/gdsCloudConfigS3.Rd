@@ -17,28 +17,43 @@ gdsCloudConfigS3(aws_access_key_id=NULL, aws_secret_access_key=NULL,
 gdsCloudConfigGCS(access_token=NULL, url=NULL)
 
 gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
-    url=NULL)
+    access_token=NULL, endpoint_suffix=NULL, endpoint=NULL, url=NULL)
 }
 \arguments{
     \item{aws_access_key_id}{AWS access key ID}
     \item{aws_secret_access_key}{AWS secret access key}
     \item{region}{AWS region (default: \code{"us-east-1"})}
     \item{session_token}{AWS session token for temporary credentials}
-    \item{endpoint}{base URL of an S3-compatible service, e.g.
-        \code{"https://minio.example.org:9000"} or
-        \code{"https://<account>.r2.cloudflarestorage.com"}; \code{""}
-        or unset selects Amazon S3 (\code{https://<bucket>.s3.<region>.amazonaws.com}).
-        The scheme defaults to \code{https://} when omitted; a path
-        prefix is allowed, e.g. \code{"https://host/s3"}.}
+    \item{endpoint}{for \code{gdsCloudConfigS3}: base URL of an
+        S3-compatible service, e.g. \code{"https://minio.example.org:9000"}
+        or \code{"https://<account>.r2.cloudflarestorage.com"}; \code{""}
+        or unset selects Amazon S3
+        (\code{https://<bucket>.s3.<region>.amazonaws.com}). For
+        \code{gdsCloudConfigAzure}: full base URL of the blob service,
+        overriding the account host, e.g.
+        \code{"http://127.0.0.1:10000/devstoreaccount1"} for the Azurite
+        emulator; \code{az://container/blob} is then served from
+        \code{<endpoint>/container/blob}. In both cases the scheme
+        defaults to \code{https://} when omitted and a path prefix is
+        allowed.}
     \item{path_style}{\code{TRUE} to address objects as
         \code{https://<host>/<bucket>/<key>} (path style), \code{FALSE}
         for \code{https://<bucket>.<host>/<key>} (virtual-hosted style),
         \code{NA} (the default) for path style with a custom
         \code{endpoint} and virtual-hosted style with Amazon S3}
-    \item{access_token}{Google Cloud OAuth2 access token}
+    \item{access_token}{for \code{gdsCloudConfigGCS}: a Google Cloud
+        OAuth2 access token. For \code{gdsCloudConfigAzure}: an Azure
+        OAuth2 access token for the storage resource (Microsoft Entra ID,
+        e.g. from
+        \code{az account get-access-token --resource https://storage.azure.com/}
+        or a managed identity); used when no SAS token is set}
     \item{account_name}{Azure storage account name}
     \item{account_key}{Azure storage account key}
     \item{sas_token}{Azure SAS (Shared Access Signature) token}
+    \item{endpoint_suffix}{DNS suffix of the blob service, default
+        \code{"blob.core.windows.net"}; e.g.
+        \code{"blob.core.chinacloudapi.cn"} (Azure China) or
+        \code{"blob.core.usgovcloudapi.net"} (Azure Government)}
     \item{url}{optional URL prefix (e.g. \code{"s3://my-bucket/"}) to
         associate the given credentials with. When \code{NULL} (the
         default) the credentials are stored as the global defaults.
@@ -58,7 +73,13 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
             (\code{true}/\code{false}) for \code{path_style}
         \item GCS: \code{GCS_ACCESS_TOKEN}
         \item Azure: \code{AZURE_STORAGE_ACCOUNT}, \code{AZURE_STORAGE_KEY},
-            \code{AZURE_STORAGE_SAS_TOKEN}
+            \code{AZURE_STORAGE_SAS_TOKEN}, \code{AZURE_STORAGE_ACCESS_TOKEN},
+            \code{AZURE_STORAGE_ENDPOINT_SUFFIX},
+            \code{AZURE_STORAGE_SERVICE_ENDPOINT}; and, as a last resort,
+            the fields of \code{AZURE_STORAGE_CONNECTION_STRING}
+            (\code{AccountName}, \code{AccountKey},
+            \code{SharedAccessSignature}, \code{EndpointSuffix},
+            \code{BlobEndpoint}, \code{UseDevelopmentStorage=true})
     }
 
     When a URL is opened via \code{\link{gdsCloudOpen}}, credentials
@@ -74,6 +95,15 @@ gdsCloudConfigAzure(account_name=NULL, account_key=NULL, sas_token=NULL,
     Registered URL prefixes are normalized by appending a trailing
     \code{"/"} if missing, so \code{"s3://bucket"} and
     \code{"s3://bucket/"} behave identically.
+
+    \subsection{Azure authentication}{
+    When several Azure credentials are configured, a SAS token is used
+    first, then an OAuth2 \code{access_token}, then the Shared Key
+    \code{account_key}; with none of them the request is anonymous
+    (public containers). Requests to a sovereign cloud only need
+    \code{endpoint_suffix}; a self-hosted or emulated service
+    (Azurite) needs the full \code{endpoint}.
+    }
 
     \subsection{S3-compatible services}{
     Any service that implements the S3 API with AWS Signature Version 4
@@ -135,6 +165,21 @@ gdsCloudConfigS3(
 )
 gds <- gdsCloudOpen("s3://genomics/hapmap.gds")
 closefn.gds(gds)
+
+# Azure with an Entra ID token, in a sovereign cloud
+gdsCloudConfigAzure(
+    account_name = "mystorageaccount",
+    access_token = "eyJ0eXAiOiJKV1QiLCJhbGci...",
+    endpoint_suffix = "blob.core.chinacloudapi.cn"
+)
+
+# Azurite emulator (the well-known development account and key)
+gdsCloudConfigAzure(
+    account_name = "devstoreaccount1",
+    account_key = paste0("Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6",
+        "IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="),
+    endpoint = "http://127.0.0.1:10000/devstoreaccount1"
+)
 
 # Cloudflare R2, scoped to one bucket
 gdsCloudConfigS3(

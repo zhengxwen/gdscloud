@@ -212,22 +212,34 @@ gdsCloudConfigGCS <- function(access_token=NULL, url=NULL)
 # Configure Azure credentials
 #
 gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
-    sas_token=NULL, url=NULL)
+    sas_token=NULL, access_token=NULL, endpoint_suffix=NULL, endpoint=NULL,
+    url=NULL)
 {
+    check_str <- function(v, name)
+    {
+        if (!is.null(v) && (!is.character(v) || length(v) != 1L || is.na(v)))
+            stop("'", name, "' must be a single character string.", call.=FALSE)
+    }
+    check_str(access_token, "access_token")
+    check_str(endpoint_suffix, "endpoint_suffix")
+    check_str(endpoint, "endpoint")
+    fields <- list(
+        azure_account_name    = account_name,
+        azure_account_key     = account_key,
+        azure_sas_token       = sas_token,
+        azure_access_token    = access_token,
+        azure_endpoint_suffix = endpoint_suffix,
+        azure_endpoint        = endpoint
+    )
     if (is.null(url))
     {
-        if (!is.null(account_name))
-            .gdscloud_env$azure_account_name <- account_name
-        if (!is.null(account_key))
-            .gdscloud_env$azure_account_key <- account_key
-        if (!is.null(sas_token))
-            .gdscloud_env$azure_sas_token <- sas_token
+        for (nm in names(fields))
+        {
+            if (!is.null(fields[[nm]]))
+                assign(nm, fields[[nm]], envir=.gdscloud_env)
+        }
     } else {
-        .set_url_credentials(url, "az", list(
-            azure_account_name = account_name,
-            azure_account_key  = account_key,
-            azure_sas_token    = sas_token
-        ))
+        .set_url_credentials(url, "az", fields)
     }
     invisible()
 }
@@ -335,20 +347,83 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
 .get_azure_credentials <- function(url=NULL)
 {
     m <- .match_url_credentials(url, "az")
+    cs <- .azure_connection_string()
     list(
         account_name = .first_nonempty(
             m$azure_account_name,
             .gdscloud_env$azure_account_name,
-            Sys.getenv("AZURE_STORAGE_ACCOUNT", "")),
+            Sys.getenv("AZURE_STORAGE_ACCOUNT", ""),
+            cs$account_name),
         account_key = .first_nonempty(
             m$azure_account_key,
             .gdscloud_env$azure_account_key,
-            Sys.getenv("AZURE_STORAGE_KEY", "")),
+            Sys.getenv("AZURE_STORAGE_KEY", ""),
+            cs$account_key),
         sas_token = .first_nonempty(
             m$azure_sas_token,
             .gdscloud_env$azure_sas_token,
-            Sys.getenv("AZURE_STORAGE_SAS_TOKEN", ""))
+            Sys.getenv("AZURE_STORAGE_SAS_TOKEN", ""),
+            cs$sas_token),
+        access_token = .first_nonempty(
+            m$azure_access_token,
+            .gdscloud_env$azure_access_token,
+            Sys.getenv("AZURE_STORAGE_ACCESS_TOKEN", "")),
+        endpoint_suffix = .first_nonempty(
+            m$azure_endpoint_suffix,
+            .gdscloud_env$azure_endpoint_suffix,
+            Sys.getenv("AZURE_STORAGE_ENDPOINT_SUFFIX", ""),
+            cs$endpoint_suffix),
+        endpoint = .first_nonempty(
+            m$azure_endpoint,
+            .gdscloud_env$azure_endpoint,
+            Sys.getenv("AZURE_STORAGE_SERVICE_ENDPOINT", ""),
+            cs$endpoint)
     )
+}
+
+
+#############################################################
+# Internal: parse an Azure storage connection string, e.g.
+#   "DefaultEndpointsProtocol=https;AccountName=..;AccountKey=..;
+#    EndpointSuffix=core.windows.net" or "UseDevelopmentStorage=true"
+# Returns a list with any of account_name, account_key, sas_token,
+# endpoint_suffix, endpoint (all "" when unset).
+#
+.azure_connection_string <- function(
+    s=Sys.getenv("AZURE_STORAGE_CONNECTION_STRING", ""))
+{
+    empty <- list(account_name="", account_key="", sas_token="",
+        endpoint_suffix="", endpoint="")
+    if (!is.character(s) || length(s) != 1L || is.na(s) || !nzchar(s))
+        return(empty)
+    parts <- strsplit(s, ";", fixed=TRUE)[[1L]]
+    parts <- parts[grepl("=", parts, fixed=TRUE)]
+    v <- sub("^[^=]*=", "", parts)
+    names(v) <- sub("=.*$", "", parts)
+    get <- function(k) if (k %in% names(v)) unname(v[[k]]) else ""
+    ans <- list(
+        account_name    = get("AccountName"),
+        account_key     = get("AccountKey"),
+        sas_token       = get("SharedAccessSignature"),
+        endpoint_suffix = "",
+        endpoint        = get("BlobEndpoint")
+    )
+    # "EndpointSuffix=core.windows.net" refers to all services; the blob
+    # service lives under "blob." of it
+    suffix <- get("EndpointSuffix")
+    if (nzchar(suffix))
+        ans$endpoint_suffix <- paste0("blob.", suffix)
+    # the local emulator (Azurite) shorthand
+    if (tolower(get("UseDevelopmentStorage")) == "true")
+    {
+        if (!nzchar(ans$account_name)) ans$account_name <- "devstoreaccount1"
+        if (!nzchar(ans$account_key))
+            ans$account_key <- paste0("Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6",
+                "IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==")
+        if (!nzchar(ans$endpoint))
+            ans$endpoint <- "http://127.0.0.1:10000/devstoreaccount1"
+    }
+    ans
 }
 
 
@@ -365,6 +440,7 @@ gdsCloudConfigAzure <- function(account_name=NULL, account_key=NULL,
         "gcs_access_token",
         # Azure
         "azure_account_name", "azure_account_key", "azure_sas_token",
+        "azure_access_token", "azure_endpoint_suffix", "azure_endpoint",
         # HTTP
         "http_bearer_token"
     )

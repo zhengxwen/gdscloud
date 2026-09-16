@@ -192,7 +192,8 @@ gdsCloudOptions <- function(connect_timeout=NULL, timeout=NULL,
     cache_mb <- .gdscloud_env$cache_size_mb
     # Call C function with credentials and cache size
     .Call(gdscloud_open_azure, url,
-        cred$account_name, cred$account_key, cred$sas_token, cache_mb)
+        cred$account_name, cred$account_key, cred$sas_token,
+        cred$access_token, cred$endpoint_suffix, cred$endpoint, cache_mb)
 }
 
 

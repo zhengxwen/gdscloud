@@ -168,6 +168,14 @@ Sys.setenv(AZURE_STORAGE_SAS_TOKEN = "your_sas")
 Or:
 ```r
 gdsCloudConfigAzure(account_name = "your_account", account_key = "your_key")
+
+# Entra ID (OAuth2) token instead of a key, e.g. from
+#   az account get-access-token --resource https://storage.azure.com/
+gdsCloudConfigAzure(account_name = "your_account", access_token = "eyJ0eXAi...")
+
+# sovereign clouds and local emulators
+gdsCloudConfigAzure(endpoint_suffix = "blob.core.chinacloudapi.cn")
+gdsCloudConfigAzure(endpoint = "http://127.0.0.1:10000/devstoreaccount1")
 ```
 
 ## Cache Control

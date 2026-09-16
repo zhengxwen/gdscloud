@@ -105,3 +105,29 @@ test_that("an S3-compatible endpoint round-trips through the S3 backend", {
     # the error path keeps the S3 prefix and the server's body
     expect_error(gdsCloudOpen("s3://data/missing.gds"), "S3: HTTP 404")
 })
+
+test_that("an Azure custom endpoint round-trips through the Azure backend", {
+    env <- get(".gdscloud_env", envir = asNamespace("gdscloud"))
+    nms <- c("azure_account_name", "azure_account_key", "azure_sas_token",
+        "azure_access_token", "azure_endpoint_suffix", "azure_endpoint")
+    old <- mget(nms, envir = env, ifnotfound = list(NULL))
+    on.exit(for (nm in nms) assign(nm, old[[nm]], envir = env), add = TRUE)
+    withr::local_envvar(AZURE_STORAGE_CONNECTION_STRING = NA)
+
+    # Shared Key (the server does not verify signatures, but the request
+    # must be well-formed) and bearer token, both against <endpoint>/data/
+    key <- paste0("Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6",
+        "tq/K1SZFPTOtr/KBHBeksoGMGw==")
+    gdsCloudConfigAzure(account_name = "devstoreaccount1", account_key = key,
+        sas_token = "", access_token = "", endpoint = srv$url)
+    gds <- gdsCloudOpen("az://data/test.gds")
+    expect_identical(read.gdsn(index.gdsn(gds, "position")), ref$position)
+    closefn.gds(gds)
+
+    gdsCloudConfigAzure(account_key = "", access_token = "tok")
+    gds <- gdsCloudOpen("az://data/test.gds")
+    expect_identical(read.gdsn(index.gdsn(gds, "text")), ref$text)
+    closefn.gds(gds)
+
+    expect_error(gdsCloudOpen("az://data/missing.gds"), "Azure: HTTP 404")
+})

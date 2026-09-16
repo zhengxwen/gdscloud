@@ -8,14 +8,18 @@
     nms <- c("aws_access_key_id", "aws_secret_access_key", "aws_region",
         "aws_session_token", "aws_endpoint", "aws_path_style",
         "azure_account_name", "azure_account_key",
-        "azure_sas_token", "gcs_access_token", "http_bearer_token")
+        "azure_sas_token", "azure_access_token", "azure_endpoint_suffix",
+        "azure_endpoint", "gcs_access_token", "http_bearer_token")
     old <- mget(nms, envir = env, ifnotfound = list(NULL))
     on.exit(for (nm in nms) assign(nm, old[[nm]], envir = env), add = TRUE)
     # scrub environment variables that would otherwise leak in
     ev <- c("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION",
         "AWS_SESSION_TOKEN", "AWS_ENDPOINT_URL", "AWS_ENDPOINT_URL_S3",
         "GDSCLOUD_S3_PATH_STYLE", "AZURE_STORAGE_ACCOUNT", "AZURE_STORAGE_KEY",
-        "AZURE_STORAGE_SAS_TOKEN", "GCS_ACCESS_TOKEN", "GDSCLOUD_HTTP_TOKEN")
+        "AZURE_STORAGE_SAS_TOKEN", "AZURE_STORAGE_ACCESS_TOKEN",
+        "AZURE_STORAGE_ENDPOINT_SUFFIX", "AZURE_STORAGE_SERVICE_ENDPOINT",
+        "AZURE_STORAGE_CONNECTION_STRING", "GCS_ACCESS_TOKEN",
+        "GDSCLOUD_HTTP_TOKEN")
     withr::local_envvar(setNames(as.list(rep(NA_character_, length(ev))), ev))
     force(code)
 }
@@ -231,5 +235,99 @@ test_that("S3 endpoint and path style resolve from env vars and URL entries", {
             "https://global.example.org")
         # unset again (the entry is removed when all fields are NULL)
         gdsCloudConfigS3(url = "s3://r2bucket/")
+    })
+})
+
+test_that("Azure bearer token, endpoint suffix and custom endpoint", {
+    .with_creds({
+        cfg <- function(...) {
+            gdsCloudConfigAzure(account_name = "acct", account_key = "",
+                sas_token = "", access_token = "", endpoint_suffix = "",
+                endpoint = "")
+            gdsCloudConfigAzure(...)
+        }
+        # OAuth2: bearer header plus the mandatory x-ms-version
+        cfg(access_token = "eyJ.tok")
+        r <- gdscloud:::.prepare_request("az://cont/b.gds")
+        expect_equal(r$url, "https://acct.blob.core.windows.net/cont/b.gds")
+        expect_setequal(r$headers,
+            c("Authorization: Bearer eyJ.tok", "x-ms-version: 2020-10-02"))
+        # a SAS token takes precedence over the bearer token
+        cfg(access_token = "eyJ.tok", sas_token = "sv=1&sig=s")
+        r <- gdscloud:::.prepare_request("az://cont/b.gds")
+        expect_equal(r$url,
+            "https://acct.blob.core.windows.net/cont/b.gds?sv=1&sig=s")
+        expect_length(r$headers, 0)
+        # sovereign cloud suffix
+        cfg(endpoint_suffix = "blob.core.chinacloudapi.cn")
+        r <- gdscloud:::.prepare_request("az://cont/b.gds")
+        expect_equal(r$url, "https://acct.blob.core.chinacloudapi.cn/cont/b.gds")
+        # Azurite-style endpoint with the account in the path
+        cfg(endpoint = "http://127.0.0.1:10000/devstoreaccount1/")
+        r <- gdscloud:::.prepare_request("az://cont/b.gds")
+        expect_equal(r$url, "http://127.0.0.1:10000/devstoreaccount1/cont/b.gds")
+        cfg(endpoint = "https:///nohost")
+        expect_error(gdscloud:::.prepare_request("az://cont/b.gds"),
+            "invalid Azure endpoint")
+        expect_error(gdsCloudConfigAzure(endpoint = 1), "endpoint")
+
+        # Shared Key against Azurite: the canonicalized resource includes
+        # the account twice (once as the account, once from the URL path)
+        skip_if_not_installed("openssl")
+        key <- paste0("Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6",
+            "tq/K1SZFPTOtr/KBHBeksoGMGw==")
+        gdsCloudConfigAzure(account_name = "devstoreaccount1", account_key = key,
+            sas_token = "", access_token = "",
+            endpoint = "http://127.0.0.1:10000/devstoreaccount1")
+        r <- gdscloud:::.prepare_request("az://cont/blob.gds",
+            range = "bytes=0-9",
+            time = as.POSIXct("2013-05-24 00:00:00", tz = "UTC"))
+        auth <- grep("^Authorization:", r$headers, value = TRUE)
+        sts <- paste0("GET\n\n\n\n\n\n\n\n\n\n\nbytes=0-9\n",
+            "x-ms-date:Fri, 24 May 2013 00:00:00 GMT\nx-ms-version:2020-10-02\n",
+            "/devstoreaccount1/devstoreaccount1/cont/blob.gds")
+        sig <- openssl::sha256(charToRaw(sts), key = openssl::base64_decode(key))
+        expect_equal(auth, paste0("Authorization: SharedKey devstoreaccount1:",
+            openssl::base64_encode(sig)))
+    })
+})
+
+test_that("Azure credentials resolve from env vars and the connection string", {
+    .with_creds({
+        gdsCloudConfigAzure(account_name = "", account_key = "", sas_token = "",
+            access_token = "", endpoint_suffix = "", endpoint = "")
+        withr::local_envvar(AZURE_STORAGE_ACCESS_TOKEN = "envtok",
+            AZURE_STORAGE_ENDPOINT_SUFFIX = "blob.core.usgovcloudapi.net",
+            AZURE_STORAGE_SERVICE_ENDPOINT = "https://svc.example.org")
+        cred <- gdscloud:::.get_azure_credentials("az://c/b")
+        expect_equal(cred$access_token, "envtok")
+        expect_equal(cred$endpoint_suffix, "blob.core.usgovcloudapi.net")
+        expect_equal(cred$endpoint, "https://svc.example.org")
+
+        # connection string as the last resort
+        withr::local_envvar(AZURE_STORAGE_ACCESS_TOKEN = NA,
+            AZURE_STORAGE_ENDPOINT_SUFFIX = NA,
+            AZURE_STORAGE_SERVICE_ENDPOINT = NA,
+            AZURE_STORAGE_CONNECTION_STRING = paste0(
+                "DefaultEndpointsProtocol=https;AccountName=csacct;",
+                "AccountKey=Y3NrZXk=;EndpointSuffix=core.chinacloudapi.cn"))
+        cred <- gdscloud:::.get_azure_credentials("az://c/b")
+        expect_equal(cred$account_name, "csacct")
+        expect_equal(cred$account_key, "Y3NrZXk=")
+        expect_equal(cred$endpoint_suffix, "blob.core.chinacloudapi.cn")
+        expect_equal(cred$endpoint, "")
+
+        withr::local_envvar(AZURE_STORAGE_CONNECTION_STRING =
+            "UseDevelopmentStorage=true")
+        cred <- gdscloud:::.get_azure_credentials("az://c/b")
+        expect_equal(cred$account_name, "devstoreaccount1")
+        expect_equal(cred$endpoint, "http://127.0.0.1:10000/devstoreaccount1")
+        expect_match(cred$account_key, "^Eby8vdM02x")
+
+        # explicit settings win over the connection string
+        gdsCloudConfigAzure(account_name = "explicit")
+        expect_equal(gdscloud:::.get_azure_credentials("az://c/b")$account_name,
+            "explicit")
+        expect_equal(gdscloud:::.azure_connection_string("")$account_name, "")
     })
 })

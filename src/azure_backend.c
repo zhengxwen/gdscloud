@@ -1,8 +1,11 @@
 // ===========================================================
 // gdscloud: Cloud Storage Access for GDS Files
 //
-// azure_backend.c: Azure Blob Storage provider (SAS token or Shared Key)
-//     for the generic curl backend
+// azure_backend.c: Azure Blob Storage provider for the generic curl
+//     backend. Authentication: SAS token, OAuth2 bearer token (Microsoft
+//     Entra ID / managed identity) or Shared Key; anonymous access for
+//     public containers. Sovereign clouds via `endpoint_suffix`, the
+//     Azurite emulator via a full `endpoint`.
 //
 // Copyright (C) 2026    Xiuwen Zheng
 //
@@ -31,7 +34,8 @@ typedef struct AzureProviderData {
 	unsigned char account_key[512];          // decoded Shared Key bytes
 	size_t account_key_len;                  // 0 when no key is configured
 	char sas_token[CLOUD_MAX_CRED_LEN];
-	char canonical_resource[CLOUD_MAX_URL_LEN + 1024];  // "/account/container/blob"
+	char access_token[CLOUD_MAX_CRED_LEN];   // OAuth2 bearer token
+	char canonical_resource[CLOUD_MAX_URL_LEN + 1024];  // "/account/[prefix/]container/blob"
 	char endpoint[CLOUD_MAX_ENDPOINT_LEN];   // blob URL without the SAS token
 } AzureProviderData;
 
@@ -96,6 +100,16 @@ static int azure_prepare(void *pd, const char *range_value, time_t now,
 	}
 
 	snprintf(req->url, sizeof(req->url), "%s", az->endpoint);
+	if (az->access_token[0])
+	{
+		// OAuth2 (Entra ID); x-ms-version is mandatory with bearer tokens
+		char auth_hdr[CLOUD_MAX_CRED_LEN + 32];
+		snprintf(auth_hdr, sizeof(auth_hdr), "Authorization: Bearer %s",
+			az->access_token);
+		curl_request_add_header(req, auth_hdr);
+		curl_request_add_header(req, "x-ms-version: " AZURE_API_VERSION);
+		return 0;
+	}
 	if (az->account_key_len > 0)
 	{
 		struct tm utc;
@@ -125,9 +139,16 @@ static void azure_error_hint(void *pd, const CurlResponseInfo *info,
 	AzureProviderData *az = (AzureProviderData *)pd;
 	size_t cur = strlen(err);
 	if (cur + 1 >= err_size) return;
-	if ((info->http_code == 401 || info->http_code == 403 ||
+	if (info->http_code == 401 && az->access_token[0])
+	{
+		snprintf(err + cur, err_size - cur,
+			" [Hint: OAuth2 access tokens expire after about an hour; obtain "
+			"a fresh token (e.g. `az account get-access-token --resource "
+			"https://storage.azure.com/`) and call gdsCloudConfigAzure() again]");
+	}
+	else if ((info->http_code == 401 || info->http_code == 403 ||
 		info->http_code == 404) &&
-		!az->sas_token[0] && az->account_key_len == 0)
+		!az->sas_token[0] && !az->access_token[0] && az->account_key_len == 0)
 	{
 		snprintf(err + cur, err_size - cur,
 			" [Hint: no credentials are configured, so the request was sent "
@@ -146,6 +167,7 @@ static void azure_free(void *pd)
 	if (!az) return;
 	memset(az->account_key, 0, sizeof(az->account_key));
 	memset(az->sas_token, 0, sizeof(az->sas_token));
+	memset(az->access_token, 0, sizeof(az->access_token));
 	free(az);
 }
 
@@ -159,13 +181,23 @@ const CurlProvider azure_provider = {
 
 
 // =====================================================================
-// Construction:
-//   az://container/blob -> https://<account>.blob.core.windows.net/container/blob
+// Construction
+//
+//   url:             az://container/blob
+//   endpoint_suffix: DNS suffix of the blob service, default
+//                    "blob.core.windows.net" (e.g. "blob.core.chinacloudapi.cn")
+//   endpoint:        optional full base URL such as
+//                    "http://127.0.0.1:10000/devstoreaccount1" (Azurite);
+//                    takes precedence over endpoint_suffix
+//
+// The blob URL is <base>/container/blob and the Shared Key canonicalized
+// resource is "/" + account + <path of base> + "/container/blob".
 // Returns NULL with a message in `err` on invalid input.
 // =====================================================================
 
 void *azure_provider_create(const char *url, const char *account_name,
-	const char *account_key, const char *sas_token,
+	const char *account_key, const char *sas_token, const char *access_token,
+	const char *endpoint_suffix, const char *endpoint,
 	char *err, size_t err_size)
 {
 	err[0] = '\0';
@@ -205,6 +237,8 @@ void *azure_provider_create(const char *url, const char *account_name,
 	snprintf(az->account_name, sizeof(az->account_name), "%s", account_name);
 	if (sas_token && sas_token[0])
 		snprintf(az->sas_token, sizeof(az->sas_token), "%s", sas_token);
+	if (access_token && access_token[0])
+		snprintf(az->access_token, sizeof(az->access_token), "%s", access_token);
 	if (account_key && account_key[0])
 	{
 		// decode the base64 Shared Key once; real keys are 64 bytes
@@ -220,12 +254,32 @@ void *azure_provider_create(const char *url, const char *account_name,
 		az->account_key_len = (size_t)n;
 	}
 
+	// where the blob service lives
+	char base[CLOUD_MAX_ENDPOINT_LEN], base_path[CLOUD_MAX_URL_LEN];
+	base_path[0] = '\0';
+	if (endpoint && endpoint[0])
+	{
+		char scheme[8], host[1024];
+		if (cloud_split_endpoint(endpoint, scheme, sizeof(scheme),
+			host, sizeof(host), base_path, sizeof(base_path)) != 0)
+		{
+			snprintf(err, err_size, "invalid Azure endpoint '%s' (expected "
+				"'https://host[:port][/prefix]')", endpoint);
+			azure_free(az);
+			return NULL;
+		}
+		snprintf(base, sizeof(base), "%s://%s%s", scheme, host, base_path);
+	} else {
+		snprintf(base, sizeof(base), "https://%s.%s", account_name,
+			(endpoint_suffix && endpoint_suffix[0]) ? endpoint_suffix
+				: "blob.core.windows.net");
+	}
+
 	char encoded_blob[CLOUD_MAX_URL_LEN];
 	cloud_url_encode_path(slash + 1, encoded_blob, sizeof(encoded_blob));
-	snprintf(az->endpoint, sizeof(az->endpoint),
-		"https://%s.blob.core.windows.net/%s/%s",
-		account_name, container, encoded_blob);
+	snprintf(az->endpoint, sizeof(az->endpoint), "%s/%s/%s",
+		base, container, encoded_blob);
 	snprintf(az->canonical_resource, sizeof(az->canonical_resource),
-		"/%s/%s/%s", account_name, container, encoded_blob);
+		"/%s%s/%s/%s", account_name, base_path, container, encoded_blob);
 	return az;
 }

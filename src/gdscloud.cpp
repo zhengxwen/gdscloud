@@ -45,7 +45,8 @@ extern void *gcs_provider_create(const char *url, const char *access_token,
 
 extern const CurlProvider azure_provider;
 extern void *azure_provider_create(const char *url, const char *account_name,
-	const char *account_key, const char *sas_token,
+	const char *account_key, const char *sas_token, const char *access_token,
+	const char *endpoint_suffix, const char *endpoint,
 	char *err, size_t err_size);
 
 } // extern "C"
@@ -292,7 +293,8 @@ extern "C" SEXP gdscloud_open_gcs(SEXP url, SEXP access_token, SEXP cache_size_m
 // =====================================================================
 
 extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_key,
-	SEXP sas_token, SEXP cache_size_mb)
+	SEXP sas_token, SEXP access_token, SEXP endpoint_suffix, SEXP endpoint,
+	SEXP cache_size_mb)
 {
 	const char *c_url = sexp_str(url);
 	COREARRAY_TRY
@@ -300,7 +302,8 @@ extern "C" SEXP gdscloud_open_azure(SEXP url, SEXP account_name, SEXP account_ke
 			throw ErrGDSCloud("Azure URL is empty or missing");
 		char err[512];
 		void *pd = azure_provider_create(c_url, sexp_str(account_name),
-			sexp_str(account_key), sexp_str(sas_token), err, sizeof(err));
+			sexp_str(account_key), sexp_str(sas_token), sexp_str(access_token),
+			sexp_str(endpoint_suffix), sexp_str(endpoint), err, sizeof(err));
 		if (!pd)
 			throw ErrGDSCloud("Cannot open '%s': %s", c_url, err);
 		rv_ans = open_cloud_gds(c_url, &azure_provider, pd,
@@ -365,7 +368,8 @@ extern "C" SEXP gdscloud_prepare_request(SEXP url, SEXP params, SEXP range,
 			provider = &azure_provider;
 			pd = azure_provider_create(c_url, param(params, "account_name"),
 				param(params, "account_key"), param(params, "sas_token"),
-				err, sizeof(err));
+				param(params, "access_token"), param(params, "endpoint_suffix"),
+				param(params, "endpoint"), err, sizeof(err));
 		}
 		else
 			throw ErrGDSCloud("Unsupported URL '%s'", c_url);
