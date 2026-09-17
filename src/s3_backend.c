@@ -304,17 +304,26 @@ void *s3_provider_create(const char *url, const char *access_key,
 	// path and the SigV4 canonical URI
 	char encoded_key[CLOUD_MAX_URL_LEN];
 	cloud_url_encode_path(slash + 1, encoded_key, sizeof(encoded_key));
+	int n_host, n_uri;
 	if (path_style)
 	{
-		snprintf(s3->host, sizeof(s3->host), "%s", host);
-		snprintf(s3->canonical_uri, sizeof(s3->canonical_uri), "%s/%s/%s",
-			base_path, bucket, encoded_key);
+		n_host = snprintf(s3->host, sizeof(s3->host), "%s", host);
+		n_uri = snprintf(s3->canonical_uri, sizeof(s3->canonical_uri),
+			"%s/%s/%s", base_path, bucket, encoded_key);
 	} else {
-		snprintf(s3->host, sizeof(s3->host), "%s.%s", bucket, host);
-		snprintf(s3->canonical_uri, sizeof(s3->canonical_uri), "%s/%s",
-			base_path, encoded_key);
+		n_host = snprintf(s3->host, sizeof(s3->host), "%s.%s", bucket, host);
+		n_uri = snprintf(s3->canonical_uri, sizeof(s3->canonical_uri),
+			"%s/%s", base_path, encoded_key);
 	}
-	snprintf(s3->endpoint, sizeof(s3->endpoint), "%s://%s%s",
+	int n_url = snprintf(s3->endpoint, sizeof(s3->endpoint), "%s://%s%s",
 		scheme, s3->host, s3->canonical_uri);
+	if (n_host < 0 || (size_t)n_host >= sizeof(s3->host) ||
+		n_uri < 0 || (size_t)n_uri >= sizeof(s3->canonical_uri) ||
+		n_url < 0 || (size_t)n_url >= sizeof(s3->endpoint))
+	{
+		snprintf(err, err_size, "the resolved request URL is too long");
+		s3_free(s3);
+		return NULL;
+	}
 	return s3;
 }

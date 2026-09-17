@@ -277,9 +277,16 @@ void *azure_provider_create(const char *url, const char *account_name,
 
 	char encoded_blob[CLOUD_MAX_URL_LEN];
 	cloud_url_encode_path(slash + 1, encoded_blob, sizeof(encoded_blob));
-	snprintf(az->endpoint, sizeof(az->endpoint), "%s/%s/%s",
+	int n_url = snprintf(az->endpoint, sizeof(az->endpoint), "%s/%s/%s",
 		base, container, encoded_blob);
-	snprintf(az->canonical_resource, sizeof(az->canonical_resource),
+	int n_res = snprintf(az->canonical_resource, sizeof(az->canonical_resource),
 		"/%s%s/%s/%s", account_name, base_path, container, encoded_blob);
+	if (n_url < 0 || (size_t)n_url >= sizeof(az->endpoint) ||
+		n_res < 0 || (size_t)n_res >= sizeof(az->canonical_resource))
+	{
+		snprintf(err, err_size, "the resolved request URL is too long");
+		azure_free(az);
+		return NULL;
+	}
 	return az;
 }
