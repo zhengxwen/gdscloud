@@ -306,6 +306,11 @@ static size_t header_cb(char *buffer, size_t size, size_t nitems, void *userdata
 		header_value(buffer, total, 25, value, sizeof(value));
 		info->blob_content_length = strtoll(value, NULL, 10);
 	}
+	else if (header_is(buffer, total, "content-type:"))
+	{
+		header_value(buffer, total, 13, info->content_type,
+			sizeof(info->content_type));
+	}
 	else if (header_is(buffer, total, "x-amz-bucket-region:"))
 	{
 		header_value(buffer, total, 20, info->bucket_region,
@@ -334,6 +339,8 @@ typedef struct {
 	HeaderState hdr;
 	WriteBuffer body;
 	CloudTransfer tr;
+	long redirects;                    // number of redirects followed
+	char final_url[CLOUD_MAX_URL_LEN]; // URL of the final response
 } Transfer;
 
 static void set_error(CurlBackendData *bd, const char *fmt, ...)
@@ -391,18 +398,41 @@ static int perform_range(CurlBackendData *bd, const char *range_value,
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
 	// perform the request, retrying transient failures with back-off
+	int aborted;
 	for (int attempt = 0; ; attempt++)
 	{
 		t->body.size = 0;
 		t->body.full = 0;
 		header_state_reset(&t->hdr, offset);
 		t->res = curl_easy_perform(curl);
-		// aborting from write_cb once the buffer is full is not an error
-		if (t->res == CURLE_WRITE_ERROR && t->body.full)
-			t->res = CURLE_OK;
+		// a transfer aborted by write_cb or header_cb is not a network
+		// failure and must not be retried, whatever code libcurl reports
+		// for it: CURLE_WRITE_ERROR over HTTP/1.1, CURLE_RECV_ERROR over
+		// HTTP/2
+		aborted = t->body.full || t->hdr.range_problem;
+		if (aborted) break;
 		if (!cloud_should_retry(&t->tr, t->res, curl, attempt)) break;
 	}
 	curl_request_free(&req);
+	// aborting from write_cb once the buffer is full is not an error
+	if (t->body.full) t->res = CURLE_OK;
+
+	char *final_url = NULL;
+	t->redirects = 0;
+	curl_easy_getinfo(curl, CURLINFO_REDIRECT_COUNT, &t->redirects);
+	curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &final_url);
+	snprintf(t->final_url, sizeof(t->final_url), "%s",
+		final_url ? final_url : "");
+
+	if (aborted)
+	{
+		// libcurl (seen with 8.7.1) keeps an HTTP/2 connection whose stream
+		// was aborted, and the next request on it stalls until the
+		// low-speed timeout; discard the handle together with its
+		// connections
+		curl_easy_cleanup(bd->curl);
+		bd->curl = curl_easy_init();
+	}
 
 	if (cloud_transfer_interrupted(&t->tr, t->res, bd->provider->name,
 		bd->last_error, sizeof(bd->last_error)))
@@ -459,13 +489,23 @@ static void format_http_error(CurlBackendData *bd, const Transfer *t)
 // CloudBackend implementation
 // =====================================================================
 
+/// Make sure there is a usable handle: it is re-created after a fork or
+/// an aborted transfer, which can fail. Returns 0 on success.
+static int check_curl(CurlBackendData *bd)
+{
+	cloud_check_reinit_curl(&bd->curl);
+	if (!bd->curl) bd->curl = curl_easy_init();
+	if (bd->curl) return 0;
+	set_error(bd, "%s: failed to initialize libcurl", bd->provider->name);
+	return -1;
+}
+
 static long long curl_backend_read_range(void *backend_data, const char *url,
 	long long offset, long long length, unsigned char *buffer)
 {
 	(void)url;
 	CurlBackendData *bd = (CurlBackendData *)backend_data;
-	cloud_check_reinit_curl(&bd->curl);
-	if (!bd->curl) return -1;
+	if (check_curl(bd) != 0) return -1;
 
 	char range_value[128];
 	snprintf(range_value, sizeof(range_value), "bytes=%lld-%lld",
@@ -488,12 +528,13 @@ static long long curl_backend_read_range(void *backend_data, const char *url,
 // service's XML/JSON error body is available for diagnostics. On success
 // the size comes from "Content-Range: bytes 0-0/<TOTAL>"; servers that
 // ignore the Range header answer 200 and are handled via Content-Length.
+// An HTML page instead of the file, e.g. a sign-in page reached through a
+// redirect, is reported here rather than as an invalid GDS header later.
 static long long curl_backend_get_size(void *backend_data, const char *url)
 {
 	(void)url;
 	CurlBackendData *bd = (CurlBackendData *)backend_data;
-	cloud_check_reinit_curl(&bd->curl);
-	if (!bd->curl) return -1;
+	if (check_curl(bd) != 0) return -1;
 
 	unsigned char body_buf[4096];
 	Transfer t;
@@ -506,6 +547,24 @@ static long long curl_backend_get_size(void *backend_data, const char *url)
 	if (info->http_code != 200 && info->http_code != 206)
 	{
 		format_http_error(bd, &t);
+		return -1;
+	}
+	if (strncasecmp(info->content_type, "text/html", 9) == 0)
+	{
+		char redirect[CLOUD_MAX_URL_LEN + 32];
+		redirect[0] = '\0';
+		if (t.redirects > 0)
+		{
+			// without the query string, which may hold a signed token
+			int n = (int)strcspn(t.final_url, "?");
+			snprintf(redirect, sizeof(redirect), " after a redirect to '%.*s'",
+				n, t.final_url);
+		}
+		set_error(bd, "%s: '%s' returned an HTML page (%s) instead of the "
+			"file%s; it may require signing in, or the URL is not a direct "
+			"link to the file", bd->provider->name,
+			bd->provider->endpoint(bd->provider_data), info->content_type,
+			redirect);
 		return -1;
 	}
 	long long size = -1;

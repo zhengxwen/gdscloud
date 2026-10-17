@@ -1,3 +1,26 @@
+CHANGES IN VERSION 0.99.6
+-------------------------
+
+USER-VISIBLE CHANGES
+
+    o An HTML page served instead of the file, such as a sign-in page
+      reached through a redirect, is now reported as such, together with
+      the redirect target, instead of failing with "Invalid magic number!"
+      or a curl error
+
+BUG FIXES
+
+    o Over HTTP/2, a transfer that gdscloud aborts on purpose (a response
+      larger than requested, or a Range mismatch) is reported by libcurl
+      as a receive error rather than a write error, so it was retried as
+      a transient failure, and the next request on the same connection
+      stalled until the low-speed timeout. Such transfers are no longer
+      retried and their connection is discarded: e.g. a URL redirected to
+      a sign-in page failed after about 5 seconds with "Failure when
+      receiving data from the peer", or after 2 minutes with "Timeout was
+      reached"
+
+
 CHANGES IN VERSION 0.99.5
 -------------------------
 

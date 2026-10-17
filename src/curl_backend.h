@@ -61,6 +61,7 @@ typedef struct CurlResponseInfo {
 	long long content_range_total;   // -1 if absent / unknown ("*")
 	long long content_length;        // -1 if absent
 	long long blob_content_length;   // Azure x-ms-blob-content-length, -1 if absent
+	char content_type[128];          // Content-Type, "" if absent
 	char bucket_region[64];          // S3 x-amz-bucket-region
 	char request_id[128];            // x-amz-request-id / x-ms-request-id
 } CurlResponseInfo;

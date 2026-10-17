@@ -53,6 +53,24 @@ test_that("a wrong Content-Range start is detected", {
         "instead of the requested offset")
 })
 
+test_that("an HTML page instead of the file is reported as such", {
+    before <- gdsCloudCacheInfo(verbose = FALSE)$retries
+    # a download behind a login: a redirect to a sign-in page larger than
+    # the size probe, so that the transfer is aborted
+    err <- tryCatch(gdsCloudOpen(paste0(srv$url, "/login/test.gds")),
+        error = function(e) conditionMessage(e))
+    expect_match(err, "returned an HTML page", fixed = TRUE)
+    expect_match(err, sprintf("after a redirect to '%s/signin/page'",
+        srv$url), fixed = TRUE)
+    # a short HTML page, no redirect
+    err <- tryCatch(gdsCloudOpen(paste0(srv$url, "/html/test.gds")),
+        error = function(e) conditionMessage(e))
+    expect_match(err, "returned an HTML page", fixed = TRUE)
+    expect_false(grepl("redirect", err, fixed = TRUE))
+    # an aborted transfer is not a transient failure
+    expect_equal(gdsCloudCacheInfo(verbose = FALSE)$retries, before)
+})
+
 test_that("transient 503 responses are retried with back-off", {
     old <- gdsCloudOptions()
     on.exit(do.call(gdsCloudOptions, old), add = TRUE)

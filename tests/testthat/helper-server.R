@@ -8,6 +8,9 @@
 #   /badrange/<f>      206 whose Content-Range start is always 0
 #   /flaky/<f>         503 on two out of every three requests, else /data
 #   /auth/<f>          requires "Authorization: Bearer secret-token"
+#   /login/<f>         302 to /signin/page, like a download behind a login
+#   /signin/<f>        200 with an HTML page larger than the size probe
+#   /html/<f>          200 with a short HTML page, no redirect
 
 .test_server_app <- function(dir)
 {
@@ -15,7 +18,8 @@
     resp <- function(status, body, headers = list())
     {
         if (is.character(body)) body <- charToRaw(body)
-        headers[["Content-Type"]] <- "application/octet-stream"
+        if (is.null(headers[["Content-Type"]]))
+            headers[["Content-Type"]] <- "application/octet-stream"
         list(status = status, headers = headers, body = body)
     }
     serve <- function(req, fname, mode)
@@ -47,6 +51,13 @@
             `Content-Range` = sprintf("bytes %.0f-%.0f/%.0f", cr_start,
                 cr_start + (end - start), size)))
     }
+    html <- function(n)
+    {
+        resp(200L, paste0("<!DOCTYPE html><html><body>",
+            strrep("<p>Sign in to download this file.</p>", n),
+            "</body></html>"),
+            list(`Content-Type` = "text/html; charset=utf-8"))
+    }
     function(req)
     {
         counter <<- counter + 1L
@@ -64,6 +75,12 @@
             else
                 resp(401L, "{\"error\":\"unauthorized\"}")
         }
+        else if (mode == "login")
+            resp(302L, "", list(Location = "/signin/page"))
+        else if (mode == "signin")
+            html(200L)
+        else if (mode == "html")
+            html(1L)
         else if (mode == "flaky")
         {
             if (counter %% 3L != 0L)

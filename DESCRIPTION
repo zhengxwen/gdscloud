@@ -1,7 +1,7 @@
 Package: gdscloud
 Type: Package
 Title: Cloud Storage Access for GDS Files
-Version: 0.99.5
+Version: 0.99.6
 Authors@R: person("Xiuwen", "Zheng", role=c("aut", "cre"),
     email="zhengx@u.washington.edu",
     comment=c(ORCID="0000-0002-1390-0708"))
