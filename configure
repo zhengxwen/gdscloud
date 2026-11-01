@@ -29,23 +29,29 @@ if [ -z "$CURL_LIBS" ]; then
 fi
 
 # ---- Find OpenSSL ----
+# OpenSSL is only used for SHA-256 / HMAC-SHA256 (src/openssl_compat.h);
+# macOS uses CommonCrypto from the system instead
 OPENSSL_CPPFLAGS=""
-OPENSSL_LIBS="-lssl -lcrypto"
+OPENSSL_LIBS=""
 
-# Check user-supplied OPENSSL_PREFIX
-if [ -z "$OPENSSL_PREFIX" ]; then
-    # Try Homebrew (macOS)
-    OPENSSL_PREFIX=$(brew --prefix openssl 2>/dev/null)
-fi
+if [ "$(uname)" != "Darwin" ]; then
+    OPENSSL_LIBS="-lssl -lcrypto"
 
-if [ -z "$OPENSSL_PREFIX" ]; then
-    # Try pkg-config
-    OPENSSL_PREFIX=$(pkg-config --variable=prefix openssl 2>/dev/null)
-fi
+    # Check user-supplied OPENSSL_PREFIX
+    if [ -z "$OPENSSL_PREFIX" ]; then
+        # Try Homebrew
+        OPENSSL_PREFIX=$(brew --prefix openssl 2>/dev/null)
+    fi
 
-if [ -n "$OPENSSL_PREFIX" ]; then
-    OPENSSL_CPPFLAGS="-I${OPENSSL_PREFIX}/include"
-    OPENSSL_LIBS="-L${OPENSSL_PREFIX}/lib -lssl -lcrypto"
+    if [ -z "$OPENSSL_PREFIX" ]; then
+        # Try pkg-config
+        OPENSSL_PREFIX=$(pkg-config --variable=prefix openssl 2>/dev/null)
+    fi
+
+    if [ -n "$OPENSSL_PREFIX" ]; then
+        OPENSSL_CPPFLAGS="-I${OPENSSL_PREFIX}/include"
+        OPENSSL_LIBS="-L${OPENSSL_PREFIX}/lib -lssl -lcrypto"
+    fi
 fi
 
 # ---- Generate src/Makevars ----

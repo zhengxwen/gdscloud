@@ -1,7 +1,7 @@
 Package: gdscloud
 Type: Package
 Title: Cloud Storage Access for GDS Files
-Version: 0.99.6
+Version: 0.99.7
 Authors@R: person("Xiuwen", "Zheng", role=c("aut", "cre"),
     email="zhengx@u.washington.edu",
     comment=c(ORCID="0000-0002-1390-0708"))
@@ -27,6 +27,8 @@ Suggests: BiocParallel, BiocStyle, keyring, knitr, rmarkdown, testthat,
 VignetteBuilder: knitr
 License: LGPL-3
 SystemRequirements: libcurl (>= 7.28.0; >= 7.32.0 recommended), OpenSSL
+        (on Linux and other Unix-like systems; not needed on macOS or
+        Windows)
 URL: https://github.com/zhengxwen/gdscloud
 BugReports: https://github.com/zhengxwen/gdscloud/issues
 biocViews: Infrastructure, DataImport

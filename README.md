@@ -25,6 +25,9 @@ BiocManager::install("gdscloud")
 ## System Requirements
 
 - libcurl >= 7.28.0
+- OpenSSL (libcrypto) on Linux and other Unix-like systems, used to sign
+    S3 and Azure requests; macOS and Windows use the crypto library of the
+    system instead (CommonCrypto and BCrypt)
 - gdsfmt >= 1.49.7
 - Windows source builds require Rtools and `LIB_CURL` to point to the curl
     toolchain path used by [src/Makevars.win](src/Makevars.win).

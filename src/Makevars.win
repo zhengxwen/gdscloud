@@ -1,6 +1,7 @@
-# libcurl and OpenSSL are supplied by the Rtools toolchain (R >= 4.5 uses
-# Rtools44+, whose UCRT environment ships libcurl and openssl). Locate them
-# with pkg-config. -DCURL_STATICLIB is required so the libcurl headers do not
-# assume a DLL import when linking the static library on Windows.
-PKG_CPPFLAGS = -DCURL_STATICLIB $(shell pkg-config --cflags libcurl openssl)
-PKG_LIBS = $(shell pkg-config --libs --static libcurl openssl) -lws2_32
+# libcurl is supplied by the Rtools toolchain (R >= 4.5 uses Rtools44+, whose
+# UCRT environment ships libcurl). Locate it with pkg-config. -DCURL_STATICLIB
+# is required so the libcurl headers do not assume a DLL import when linking
+# the static library on Windows. SHA-256 / HMAC-SHA256 use BCrypt (Windows
+# CNG) from the system, see openssl_compat.h.
+PKG_CPPFLAGS = -DCURL_STATICLIB $(shell pkg-config --cflags libcurl)
+PKG_LIBS = $(shell pkg-config --libs --static libcurl) -lbcrypt -lws2_32

@@ -1,3 +1,14 @@
+CHANGES IN VERSION 0.99.7
+-------------------------
+
+UTILITIES
+
+    o SHA-256 and HMAC-SHA256 for signing S3 and Azure requests use the
+      crypto library of the platform: CommonCrypto on macOS and BCrypt
+      (Windows CNG) on Windows, so OpenSSL is no longer needed there; it
+      is still used on Linux and other Unix-like systems
+
+
 CHANGES IN VERSION 0.99.6
 -------------------------
 
