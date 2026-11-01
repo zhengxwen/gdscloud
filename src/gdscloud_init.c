@@ -47,6 +47,23 @@ static const R_CallMethodDef CallEntries[] = {
 // defined in R_GDS2.h (included via R_gdscloud.c)
 extern void Init_GDS_Routines(void);
 
+
+static void check_interrupt_fn(void *dummy)
+{
+	(void)dummy;
+	R_CheckUserInterrupt();
+}
+
+/// 1 if an interrupt is pending. R_CheckUserInterrupt() would longjmp to
+/// the top level, through the C++ frames of gdsfmt; running it under
+/// R_ToplevelExec() confines the jump so the transfer can be aborted and
+/// unwound through the normal error path.
+static int r_pending_interrupt(void)
+{
+	return !R_ToplevelExec(check_interrupt_fn, NULL);
+}
+
+
 void R_init_gdscloud(DllInfo *info)
 {
 	// register .Call methods
@@ -61,6 +78,9 @@ void R_init_gdscloud(DllInfo *info)
 
 	// initialize fork tracking (required for mclapply/forked processes)
 	cloud_init_fork_tracking();
+
+	// let transfers be interrupted by the user
+	cloud_interrupt_hook = r_pending_interrupt;
 }
 
 void R_unload_gdscloud(DllInfo *info)

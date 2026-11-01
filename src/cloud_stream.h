@@ -140,13 +140,18 @@ void cloud_format_error(char *out, size_t out_size,
 // =====================================================================
 // Transfer setup shared by the backends: timeouts and user interrupts
 //
-// Without timeouts a stalled connection blocks R forever, and a plain
-// R_CheckUserInterrupt() from inside a transfer would longjmp through the
-// C++ frames of gdsfmt. cloud_curl_setup() installs a connect timeout, a
-// low-speed timeout and a progress callback that polls for a pending
-// interrupt (confined with R_ToplevelExec) and aborts the transfer;
-// cloud_transfer_interrupted() turns that abort into an error message.
+// Without timeouts a stalled connection blocks forever. cloud_curl_setup()
+// installs a connect timeout, a low-speed timeout and a progress callback
+// that polls for a pending user interrupt through `cloud_interrupt_hook`
+// and aborts the transfer; cloud_transfer_interrupted() turns that abort
+// into an error message.
 // =====================================================================
+
+/// Set by the host (e.g. the R glue): returns 1 if a user interrupt is
+/// pending, without unwinding the C stack, so that the transfer is aborted
+/// and reported through the normal error path; NULL (the default) never
+/// interrupts
+extern int (*cloud_interrupt_hook)(void);
 
 typedef struct CloudTransfer {
 	int interrupted;             // set by the progress callback / back-off sleep

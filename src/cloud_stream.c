@@ -14,9 +14,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <R.h>
-#include <Rinternals.h>
-
 #ifdef _WIN32
 #include <windows.h>
 #ifndef strncasecmp
@@ -267,18 +264,12 @@ void cloud_set_timeouts(long connect_timeout, long low_speed_time)
 	if (low_speed_time > 0) g_low_speed_time = low_speed_time;
 }
 
-static void check_interrupt_fn(void *dummy)
-{
-	(void)dummy;
-	R_CheckUserInterrupt();
-}
+int (*cloud_interrupt_hook)(void) = NULL;
 
-/// 1 if an interrupt is pending. R_CheckUserInterrupt() would longjmp to
-/// the top level; running it under R_ToplevelExec() confines the jump so
-/// the transfer can be aborted and unwound through the normal error path.
+/// 1 if an interrupt is pending, as reported by the host's hook
 static int pending_interrupt(void)
 {
-	return !R_ToplevelExec(check_interrupt_fn, NULL);
+	return cloud_interrupt_hook ? cloud_interrupt_hook() : 0;
 }
 
 #if LIBCURL_VERSION_NUM >= 0x072000
